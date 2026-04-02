@@ -1,0 +1,40 @@
+import { get, post } from "axios";
+import { BASE_URL, reply } from "..";
+import { ChatCommand } from "../classes/Types"
+
+const SongRequestCommand: ChatCommand = {
+    enabled: true,
+    run: async (client, user, content, message) => {
+        
+       let query = content.trim();
+       if(!query) {
+            reply(client, user, `Please enter a search query`)
+            return;
+       }
+        reply(client, user, `Searching for "${query}" on Spotify...`, message)
+        try {
+            const queueLocked = (await get(`${BASE_URL}/spotify/queue-mode`)).data;
+            if(queueLocked !== false) {
+                reply(client, user, `The queue is currently locked. The track could not be added.`, message)
+                    return;
+            } 
+            const track = await get(`${BASE_URL}/spotify/search?q=${encodeURI(query)}`)
+            if (!track || !track.data) {
+                reply(client, user, `Search failed. Failed to find track "${query}"`)
+                return;
+            } else {
+                const addToQueue = await post(`${BASE_URL}/spotify/queue/add-track`, { uri: track.data.uri })
+                if (!addToQueue || addToQueue.status !== 200) {
+                    reply(client, user, `Failed to add track "${decodeURI(track.data.title)} - ${decodeURI(track.data.artist)}" to the queue. Please try another query.`, message)
+                    return;
+                } else {
+                    reply(client, user, `Added track "${decodeURI(track.data.title)} - ${decodeURI(track.data.artist)}" to the queue!`, message)
+                }
+            } 
+        } catch(e) {
+            reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`, message)
+        }
+    }
+}
+
+export default SongRequestCommand

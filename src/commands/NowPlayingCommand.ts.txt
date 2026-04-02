@@ -1,0 +1,21 @@
+import { get } from "axios";
+import { ChatCommand } from "../classes/Types";
+import { BASE_URL, reply } from "..";
+
+const NowPlayingCommand: ChatCommand = {
+    enabled: true,
+    run: async(client, user, content, message) => {
+        try {
+
+            const nowPlaying = (await get(`${BASE_URL}/spotify/user/now-playing`)).data;
+            if(!nowPlaying) return reply(client, user, `There is currently nothing playing.`, message)
+                
+                reply(client, user, `${decodeURI(nowPlaying.title)} - ${decodeURI(nowPlaying.artist)} < https://open.spotify.com/track/${nowPlaying.id} >`, message)
+            } catch(e) {
+                console.log(e)
+                reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`, message)
+            }
+    },
+}
+
+export default NowPlayingCommand;

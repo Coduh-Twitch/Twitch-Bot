@@ -1,0 +1,31 @@
+import { get } from "axios";
+import { ChatCommand, SearchedTrack } from "../classes/Types";
+import { BASE_URL, CHANNEL, reply } from "..";
+
+const QueueCommand: ChatCommand = {
+    enabled: true,
+    run: async (client, user, content, message) => {
+        try {
+
+            const queue: SearchedTrack[] = (await get(`${BASE_URL}/spotify/queue`)).data;
+            if (!queue || queue.length <= 0) return reply(client, user, `The queue is currently empty.`)
+
+            let first = queue[0]
+            console.log(first)
+
+            const queueLocked = (await get(`${BASE_URL}/spotify/queue-mode`)).data
+
+            // let firstString: string[] = first.map((v, i) => `${(i+1) === 1 ? `NEXT UP! >` : `${i+1}.`} ${decodeURI(v.title)} - ${decodeURI(v.artist)}`)
+            let firstString = `NEXT UP! > ${decodeURI(first.title)} - ${decodeURI(first.artist)}`
+
+            client.say(CHANNEL, `There ${queue.length === 1 ? "is" : "are"} ${queue.length} track${queue.length === 1 ? "" : "s"} in the queue. ${queueLocked ? `The queue is currently locked.` : `Type !songrequest <query> to add a song to the queue!`}`, { replyTo: message.id })
+            client.say(CHANNEL, firstString)
+            client.say(CHANNEL, `Check out ${BASE_URL}/queue to view the full queue, and view each track on Spotify!`)
+        } catch (e) {
+            reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`, message)
+
+        }
+    },
+}
+
+export default QueueCommand;

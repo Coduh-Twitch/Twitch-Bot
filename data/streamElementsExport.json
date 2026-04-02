@@ -1,0 +1,9 @@
+{
+  "_total": 0,
+  "users": [
+    {
+      "username": "string",
+      "points": "number"
+    }
+  ]
+}

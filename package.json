@@ -1,0 +1,29 @@
+{
+  "name": "tw",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "nodemon --exec ts-node src/index.ts -dev",
+    "build": "npx tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@twurple/api": "^7.4.0",
+    "@twurple/auth": "^7.4.0",
+    "@twurple/chat": "^7.4.0",
+    "@types/express": "^5.0.3",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^24.10.0",
+    "@types/ws": "^8.18.1",
+    "axios": "^1.12.2",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "fs-extra": "^11.3.4",
+    "googleapis": "^160.0.0",
+    "mongoose": "^8.18.2",
+    "ws": "^8.20.0"
+  }
+}
