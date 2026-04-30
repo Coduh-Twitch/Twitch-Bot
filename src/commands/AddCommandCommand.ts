@@ -2,9 +2,26 @@ import { prefix, reply } from "..";
 import { ChatCommand } from "../classes/Types";
 import { customCommandModel } from "../models/command";
 import {randomUUID} from "node:crypto"
+import { UserRoles } from "../models/user";
 
 const AddCommandCommand: ChatCommand = {
     enabled: true,
+    name: "addcommand",
+    aliases: ["addcmd", "ac", "addcommand"],
+    help: "Add a custom command trigger and response",
+    userLevel: UserRoles.MOD,
+    args: [
+        {
+            name: "trigger",
+            description: "What to type in chat to trigger this command",
+            required: true
+        },
+        {
+            name: "response",
+            description: "What the bot should respond with when this command is triggered",
+            required: true
+        }
+    ],
     run: async (client, user, content, message) => {
         
         console.log(content);

@@ -13,13 +13,15 @@ export interface User {
     discordId: string | null;
     points: number;
     role: UserRoles;
+    game_code: string | null;
 }
 
 const data = new Schema<User>({
     twitchId: String,
     discordId: String,
     points: Number,
-    role: Number
+    role: Number,
+    game_code: String
 })
 
 export const userModel = model("user", data);

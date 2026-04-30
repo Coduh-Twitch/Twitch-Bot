@@ -2,16 +2,28 @@ import { prefix, reply } from "..";
 import { ChatCommand } from "../classes/Types";
 import { customCommandModel } from "../models/command";
 import {randomUUID} from "node:crypto"
-import { userModel } from "../models/user";
+import { userModel, UserRoles } from "../models/user";
 
 let betsMap: Map<string, boolean> = new Map<string, boolean>();
 
 const GambleCommandCommand: ChatCommand = {
     enabled: true,
+    name: "slots",
+    aliases: ["roll", "gamble"],
+    help: "99% of gamblers stop before they win... Just saying.",
+    userLevel: UserRoles.DEFAULT,
+    args: [
+        {
+            name: "amount",
+            description: "The amount of points to roll. \"all\" to roll all of your points",
+            required: true
+        }
+    ],
     run: async (client, user, content, message) => {
         if(betsMap.has(message.userInfo.userId)) {
             if(betsMap.get(message.userInfo.userId)) {
                 betsMap.set(message.userInfo.userId, false);
+                betsMap.delete(message.userInfo.userId)
                 return reply(client, user, `Woah there! You need to wait a moment before rolling again. Don't want you getting a gamblin' addiction!`, message);
             }
             return;

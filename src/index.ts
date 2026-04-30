@@ -2,14 +2,14 @@ import "dotenv/config";
 import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
 import { ChatClient, ChatMessage } from "@twurple/chat"
 import { get, post } from "axios";
-import { ChatCommand, SearchedTrack } from "./classes/Types";
+import { ChatCommand, SearchedTrack, UserRolesStringMap } from "./classes/Types";
 // import SongRequestCommand from "./commands/SongRequestCommand";
 // import QueueCommand from "./commands/QueueCommand";
 // import NowPlayingCommand from "./commands/NowPlayingCommand";
 import DiscordCommand from "./commands/DiscordCommand";
 import TiktokCommand from "./commands/TiktokCommand";
 // import GoogleAPI from "./classes/GoogleAPI";
-// import scheduledMessages from "./data/scheduledMessages";
+import scheduledMessages, { scheduledMessageTimeout } from "./data/scheduledMessages";
 import mongoose from "mongoose";
 import { customCommandModel } from "./models/command";
 import AddCommandCommand from "./commands/AddCommandCommand";
@@ -28,6 +28,10 @@ import { cwd } from "process";
 import GambleCommandCommand from "./commands/GambleCommand";
 import { ApiClient } from "@twurple/api";
 import PointsCommand from "./commands/PointsCommand";
+import SetRoomCodeCommand from "./commands/SetRoomCodeCommand";
+import RoomCodeCommand from "./commands/RoomCodeCommand";
+import { pinMessage } from "./util";
+import { readdirSync } from "fs";
 
 export interface SessionData {
     userId: string;
@@ -72,22 +76,29 @@ export const websocket: Socket = new Socket(parseInt(process.env.SOCKET_PORT));
 
 export const prefix = "!";
 
-export const BASE_URL = process.env.SPOTIFY_APP_URL;
-export const CHANNEL_REWARDS = {
-    spotify_test: "9bbed441-e8e2-47d7-9364-b519d1030206"
-}
+export const commandsMap: Map<string, ChatCommand> = new Map<string, ChatCommand>();
+
+// export const BASE_URL = process.env.SPOTIFY_APP_URL;
+// export const CHANNEL_REWARDS = {
+//     spotify_test: "9bbed441-e8e2-47d7-9364-b519d1030206"
+// }
 
 setInterval(async () => {
     if (!client) {
         console.log(``)
         return;
     }
-    console.log(client.isConnected ? "Connected" : client.isConnecting ? "Connecting..." : "Not connected")
+    // console.log(client.isConnected ? "Connected" : client.isConnecting ? "Connecting..." : "Not connected")
     if (!client.isConnected) {
         let botSession = await sessionModel.findOne({ userId: process.env.BOT_USER_ID });
 
         if (botSession) {
-            let clientAuthDetail: { data: { data: any[] } } = await get(`https://api.twitch.tv/helix/users`, { headers: { "Authorization": `Bearer ${botSession.accessToken}`, "Client-Id": process.env.CLIENT_ID } })
+            let clientAuthDetail: { data: { data: any[] } } = {data: {data: null}};
+            try {
+                clientAuthDetail = await get(`https://api.twitch.tv/helix/users`, { headers: { "Authorization": `Bearer ${botSession.accessToken}`, "Client-Id": process.env.CLIENT_ID } })
+            }catch(e) {
+                clientAuthDetail = {data: {data: null}};
+            }
             if (clientAuthDetail.data?.data?.[0]) {
                 let ud = clientAuthDetail.data?.data?.[0];
                 if (!authProvider.hasUser(ud.id)) {
@@ -111,11 +122,6 @@ setInterval(async () => {
                         }
                     }
                 }
-                // console.log(authProvider.getCurrentScopesForUser(ud.id))
-                // if (authProvider.getCurrentScopesForUser(ud.id) !== ud.scopes) {
-                //     console.log(`Re-Authorize Client - Scopes do not match`)
-                // } else {
-                // }
             } else {
                 console.log(`Re-Authorize Client - Could not fetch authorization details`)
             }
@@ -133,8 +139,17 @@ let intervals: NodeJS.Timeout[] = [];
 const app = express()
 
 export function reply(c, user, content, msg?: ChatMessage): void {
-    if (!msg) c.say(CHANNEL, `@${user} -> ${content}`)
-    if (msg) c.say(CHANNEL, `${content}`, { replyTo: msg.id })
+    if (!msg) apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
+    if (msg) apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content, {replyParentMessageId: msg.id})
+}
+
+export async function sendAndPin(c: ChatClient, user, content) {
+    apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content).then(async m => {
+        console.log("sent message via helix ", m.id)
+        await pinMessage(m.id);
+    }).catch(e => {
+        console.log("Failed to send chat message via Helix", e)
+    })
 }
 
 export async function runCommand(command: ChatCommand, c, user, content, msg) {
@@ -152,22 +167,37 @@ async function initBot(c) {
     c.onConnect(async () => {
         console.log("Initializing Local Websocket Server")
         if (client.isConnected && !websocket.initialized) await websocket.initServerAndSocket();
+
+        console.log("Loading Commands Map...")
+        readdirSync(join(process.cwd(), "src", "commands")).forEach(file => {
+            let command: ChatCommand = (require(join(process.cwd(), "src", "commands", file))).default;
+            if(command && command.help && command.enabled) {
+                let cmdCopy = command;
+                cmdCopy.userLevel = UserRolesStringMap[`${cmdCopy.userLevel}`] as any;
+                commandsMap.set(file.split(".")[0].toLowerCase(), cmdCopy);
+            }
+        })
+
         // console.log(`Initializing Youtube API`)
         // await googleApi.initYoutube()
         console.log(`Client Connected!`)
         // await client.join(CHANNEL)
         // scheduledMessages.forEach(async sm => {
+            // let stream = await apiClient.streams.getStreamByUserName(process.env.CHANNEL);
+            let stream = true;
+            if (scheduledMessages.length > 0 && stream) {
+                let int = await setInterval(async () => {
+                    let filtered = await Promise.all(scheduledMessages.filter(async m => (await m.getContent()) !== null));
+                    let rand = Math.floor(Math.random() * filtered.length);
 
-        //     if (sm.enabled) {
-        //         let int = await setInterval(async () => {
-        //             await client.action(CHANNEL, sm.content)
-        //         }, sm.interval_ms)
-        //         intervals.push(int);
-        //     }
+                    let sm = scheduledMessages[rand];
+
+                    let content = await sm.getContent()
+                    if(content) await apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
+                }, scheduledMessageTimeout)
+                intervals.push(int);
+            }
         // })
-
-        // console.log(`Loaded ${scheduledMessages.filter(s => s.enabled !== false).length} scheduled message${scheduledMessages.filter(s => s.enabled !== false).length === 1 ? `` : `s`} (${scheduledMessages.filter(s => s.enabled !== true).length} disabled)`)
-        // await loadCustomCommands(client, CHANNEL);
     })
     c.onJoin((channel, user) => {
         console.log(`[${user}] Joined Channel -> ${channel}`)
@@ -178,14 +208,12 @@ async function initBot(c) {
     c.onMessage(async (channel, user, content, msg: ChatMessage) => {
         let pointsBackupPath = join(cwd(), "data", "streamElementsExport.json");
         console.log(pointsBackupPath)
-        // if(msg.rewardId !== null) {
-        //     if(msg.rewardId === CHANNEL_REWARDS.spotify_test) await runCommand(SongRequestCommand, client, user, content, msg)
-        //     return;
-        // }
 
         ensureFileSync(pointsBackupPath);
 
         let isBot = [...KNOWN_BOT_NAMES, process.env.BOT_USER_NAME].includes(user.toLowerCase());
+
+        console.log(content)
 
         let dbUser = await userModel.findOne({twitchId: msg.userInfo.userId});
         if(!dbUser) {
@@ -244,6 +272,10 @@ async function initBot(c) {
             if (["addcmd", "ac", "addcommand",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(AddCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["delcommand", "deletecommand", "removecommand", "delcmd"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(DeleteCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["editcmd", "editcommand", "changecommand",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(EditCommandCommand, client, user, content.split(cmd)[1], msg)
+            if (["setcode", "setroomcode", "src",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(SetRoomCodeCommand, client, user, content.split(cmd)[1], msg)
+            if (["code", "roomcode", "rc", "join", "lobby", "room"].includes(cmdNoPrefix)) await runCommand(RoomCodeCommand, client, user, content.split(cmd)[1], msg)
+            // if (["join"].includes(cmdNoPrefix)) await runCommand(JoinCommand, client, user, content.split(cmd)[1], msg)
+
         }
 
 

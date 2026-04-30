@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { CHANNEL, client, reply } from "..";
+import { CHANNEL, client, commandsMap, reply } from "..";
 import { get, post } from "axios";
 import { pollModel } from "../models/polls";
 
@@ -56,6 +56,11 @@ apiRouter.post("/polls/end/:id", async (req, res) => {
     if(choices[1].votes > 0) await client.action(CHANNEL, `| 🥈 RUNNER-UP -> ${choices[1].text} (${choices[1].votes} vote${choices[1].votes === 1 ? "" : "s"})`)
 
     
+})
+
+apiRouter.get("/commands", async (req, res) => {
+    if(!commandsMap || commandsMap.size <= 0) return res.sendStatus(404);
+    res.send({commands: [...commandsMap.values()]})
 })
 
 export default apiRouter;

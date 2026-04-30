@@ -2,9 +2,26 @@ import { prefix, reply } from "..";
 import { ChatCommand } from "../classes/Types";
 import { customCommandModel } from "../models/command";
 import {randomUUID} from "node:crypto"
+import { UserRoles } from "../models/user";
 
 const EditCommandCommand: ChatCommand = {
     enabled: true,
+    name: "editcommand",
+    aliases: ["editcmd", "changecommand"],
+    help: "Edit a previously created custom command's response",
+    userLevel: UserRoles.MOD,
+    args: [
+        {
+            name: "trigger",
+            description: "The trigger of the custom command you'd like to edit",
+            required: true
+        },
+        {
+            name: "new_response",
+            description: "The new response of the edited custom command",
+            required: true
+        }
+    ],
     run: async (client, user, content, message) => {
         content = content.trim();
         let cmd = content.split(' ')[0];

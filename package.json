@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "nodemon --exec ts-node src/index.ts -dev",
-    "build": "npx tsc"
+    "build": "npx tsc",
+		"db:push": "drizzle-kit push",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:studio": "drizzle-kit studio"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +28,9 @@
     "fs-extra": "^11.3.4",
     "googleapis": "^160.0.0",
     "mongoose": "^8.18.2",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "drizzle-kit": "^0.31.8",
+		"drizzle-orm": "^0.45.1",
+    "better-sqlite3": "^12.6.2"
   }
 }

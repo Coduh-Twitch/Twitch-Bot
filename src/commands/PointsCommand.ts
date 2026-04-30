@@ -8,6 +8,64 @@ let cooldownMap: Map<string, boolean> = new Map<string, boolean>();
 
 const PointsCommand: ChatCommand = {
     enabled: true,
+    name: "points",
+    aliases: ["pts"],
+    help: "Manage or view points",
+    subCommands: [
+        {
+            name: "add",
+            args: [
+                {
+                    name: "username",
+                    description: "The username of the user who you'd like to add points to",
+                    required: true
+                },
+                {
+                    name: "amount",
+                    description: "The amount of points to add to the user's balance",
+                    required: true
+                }
+            ]
+        },
+        {
+            name: "remove",
+            args: [
+                {
+                    name: "username",
+                    description: "The username of the user who you'd like to remove points from",
+                    required: true
+                },
+                {
+                    name: "amount",
+                    description: "The amount of points to remove from the user's balance",
+                    required: true
+                }
+            ]
+        },
+        {
+            name: "set",
+            args: [
+                {
+                    name: "username",
+                    description: "The username of the user who's points you'd like to set",
+                    required: true
+                },
+                {
+                    name: "amount",
+                    description: "The amount of points to set the user's balance to",
+                    required: true
+                }
+            ]
+        }
+    ],
+    args: [
+        {
+            name: "username",
+            description: "The username of the user who's points you'd like to view. Exclude this to view your own points.",
+            required: false
+        }
+    ],
+    userLevel: UserRoles.DEFAULT,
     run: async (client, user, content, message) => {
         if(cooldownMap.has(message.userInfo.userId)) {
             if(cooldownMap.get(message.userInfo.userId)) {
@@ -41,6 +99,9 @@ const PointsCommand: ChatCommand = {
 
         try {
             if(action && actions.includes(action)) {
+
+                if(!message.userInfo.isMod) return reply(client, user, `You must be Moderator or higher to do that.`, message)
+
                 // action
                 if(addActions.includes(action)) {
                     let target = args[1];
