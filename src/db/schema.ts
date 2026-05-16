@@ -41,6 +41,19 @@ export interface DBParticipant {
 	position: number;
 }
 
+export interface DBRaffle {
+	id: string;
+	creator_id: string;
+	expires_at: number;
+	points: number;
+	winner_id: string;
+}
+
+export interface DBRaffleParticipant {
+	id: string;
+	raffle_id: string;
+}
+
 export const queues = sqliteTable("queues", {
 	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()).notNull(),
 
@@ -63,4 +76,17 @@ export const participants = sqliteTable("participants", {
 export const banned_users = sqliteTable("banned_users", {
 	primaryId: text("primaryId").notNull().primaryKey().$defaultFn(() => crypto.randomUUID()),
 	id: text("id").notNull()
+})
+
+export const raffles = sqliteTable("raffles", {
+	id: text("id").notNull().$defaultFn(() => crypto.randomUUID()),
+	creator_id: text("creator_id").notNull(),
+	expires_at: integer("expires_at", {mode: "timestamp_ms"}).notNull().$defaultFn(() => new Date(Date.now() + 60e3)),
+	points: integer("points").notNull().default(1000),
+	winner_id: text("winner_id").default(null)
+})
+
+export const raffle_participants = sqliteTable("raffle_participants", {
+	id: text("id").notNull().primaryKey(),
+	raffle_id: text("raffle_id").notNull(),
 })

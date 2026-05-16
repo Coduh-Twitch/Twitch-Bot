@@ -28,7 +28,6 @@ const SetRoomCodeCommand: ChatCommand = {
             let set: boolean = await setRoomCode(newCode);
             if(set) {
                 await client.say(process.env.CHANNEL, `Code has been set: ${newCode}`)
-                await client.say(process.env.CHANNEL, `${newCode}`)
                 
             } else {
                 reply(client, user, `Failed to set Room Code`, message)

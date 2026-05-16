@@ -30,8 +30,11 @@ import { ApiClient } from "@twurple/api";
 import PointsCommand from "./commands/PointsCommand";
 import SetRoomCodeCommand from "./commands/SetRoomCodeCommand";
 import RoomCodeCommand from "./commands/RoomCodeCommand";
-import { pinMessage } from "./util";
+import { getWeather, pinMessage } from "./util";
 import { readdirSync } from "fs";
+import { createRaffleParticipant, deleteRaffle, getAllRaffles, getRaffleParticipants } from "./db/raffle";
+import RaffleCommand from "./commands/RaffleCommand";
+import { DBRaffle } from "./db/schema";
 
 export interface SessionData {
     userId: string;
@@ -64,10 +67,14 @@ export const SOCIAL_LINKS = {
 export const KNOWN_BOT_NAMES = ["streamelements", "nightbot", "fossabot", "moobot", "streamlabs"]
 
 export const CHANNEL = process.env.CHANNEL;
+let thirtyWarnings: Map<string, boolean> = new Map();
+let fifteenWarnings: Map<string, boolean> = new Map();
+let sevenWarnings: Map<string, boolean> = new Map();
+
 
 // export const authProvider = new StaticAuthProvider(process.env.CLIENT_ID, process.env.TOKEN);
 export const authProvider = new RefreshingAuthProvider({ clientId: process.env.CLIENT_ID, clientSecret: process.env.CLIENT_SECRET });
-export const apiClient = new ApiClient({authProvider});
+export const apiClient = new ApiClient({ authProvider });
 
 export const client: ChatClient = new ChatClient({ authProvider, channels: [CHANNEL], })
 let clientReady = false;
@@ -93,11 +100,11 @@ setInterval(async () => {
         let botSession = await sessionModel.findOne({ userId: process.env.BOT_USER_ID });
 
         if (botSession) {
-            let clientAuthDetail: { data: { data: any[] } } = {data: {data: null}};
+            let clientAuthDetail: { data: { data: any[] } } = { data: { data: null } };
             try {
                 clientAuthDetail = await get(`https://api.twitch.tv/helix/users`, { headers: { "Authorization": `Bearer ${botSession.accessToken}`, "Client-Id": process.env.CLIENT_ID } })
-            }catch(e) {
-                clientAuthDetail = {data: {data: null}};
+            } catch (e) {
+                clientAuthDetail = { data: { data: null } };
             }
             if (clientAuthDetail.data?.data?.[0]) {
                 let ud = clientAuthDetail.data?.data?.[0];
@@ -115,9 +122,9 @@ setInterval(async () => {
                         if (!clientReady) {
                             clientReady = true;
                             await initBot(client);
-                            let botDbUser = await userModel.findOne({twitchId: ud.id});
-                            if(!botDbUser) {
-                                await userModel.create({twitchId: ud.id, discordId: null, points: 0, role: UserRoles.BOT})
+                            let botDbUser = await userModel.findOne({ twitchId: ud.id });
+                            if (!botDbUser) {
+                                await userModel.create({ twitchId: ud.id, discordId: null, points: 0, role: UserRoles.BOT })
                             }
                         }
                     }
@@ -130,7 +137,78 @@ setInterval(async () => {
         }
 
     } else {
+        let raffles = getAllRaffles();
+        raffles = raffles.filter(r => !r.winner_id);
 
+        
+        if(raffles.length <= 0) {
+            if(sevenWarnings.size > 0) sevenWarnings.clear();
+            if(fifteenWarnings.size > 0) fifteenWarnings.clear();
+            if(fifteenWarnings.size > 0) thirtyWarnings.clear();
+        } else {
+            console.log("RAFFLES", raffles);
+        }
+
+
+        for (let i = 0; i < raffles.length; i++) {
+            const raffle = raffles[i];
+            let thirtySeconds = Date.now() + (30e3);
+            let fifteenSeconds = Date.now() + (15e3);
+            let sevenSeconds = Date.now() + (7e3);
+
+            let raffleExpiration = raffle.expires_at.getTime();
+
+            if(raffleExpiration <= thirtySeconds && !thirtyWarnings.has(raffle.id)) {
+                thirtyWarnings.set(raffle.id, true);
+                await reply(client, null, `The raffle expires in 30 seconds`)
+            }
+
+            if(raffleExpiration <= fifteenSeconds && !fifteenWarnings.has(raffle.id)) {
+                fifteenWarnings.set(raffle.id, true);
+                await reply(client, null, `The raffle expires in 15 seconds`)
+            }
+
+            if(raffleExpiration <= sevenSeconds && !sevenWarnings.has(raffle.id)) {
+                sevenWarnings.set(raffle.id, true);
+                await reply(client, null, `The raffle expires in 7 seconds`)
+            }
+
+            if(raffleExpiration <= Date.now()) {
+                let participants = getRaffleParticipants(raffle.id);
+                if(!raffle.winner_id) {
+                    if(participants && participants.length > 0) {
+                        let randomInd = Math.floor(Math.random() * participants.length);
+                        let winnerId = participants[randomInd] || participants[0];
+                        let winner = await apiClient.users.getUserById(winnerId);
+                        if(winner) {
+                            let dbUser = await userModel.findOne({twitchId: winner.id});
+                            if(!dbUser) {
+                                let newUser = new userModel({
+                                    twitchId: winner.id,
+                                    points: raffle.points,
+                                    role: UserRoles.DEFAULT
+                                })
+
+                                await newUser.save();
+                            } else {
+                                dbUser.set("points", dbUser.points + raffle.points);
+                                await dbUser.save();
+                            }
+                            deleteRaffle(raffle.id);
+                            await reply(client, null, `FBtouchdown @${winner.displayName} won the raffle for ${raffle.points.toLocaleString()} point${raffle.points === 1 ? "" : "s"}!`)
+
+                        } else {
+                            await reply(client, null, `StinkyCheese The raffle winner had a heart attack and fucking died`);
+                            deleteRaffle(raffle.id);
+                        }
+
+                    } else {
+                        await reply(client, null, `Nobody entered the raffle NotLikeThis`);
+                        deleteRaffle(raffle.id);
+                    }
+                } else deleteRaffle(raffle.id);
+            }
+        }
     }
 }, 1e3)
 
@@ -138,9 +216,9 @@ let intervals: NodeJS.Timeout[] = [];
 
 const app = express()
 
-export function reply(c, user, content, msg?: ChatMessage): void {
+export function reply(c: ChatClient, user: string | null, content, msg?: ChatMessage): void {
     if (!msg) apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
-    if (msg) apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content, {replyParentMessageId: msg.id})
+    if (msg) apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content, { replyParentMessageId: msg.id })
 }
 
 export async function sendAndPin(c: ChatClient, user, content) {
@@ -171,7 +249,7 @@ async function initBot(c) {
         console.log("Loading Commands Map...")
         readdirSync(join(process.cwd(), "src", "commands")).forEach(file => {
             let command: ChatCommand = (require(join(process.cwd(), "src", "commands", file))).default;
-            if(command && command.help && command.enabled) {
+            if (command && command.help && command.enabled) {
                 let cmdCopy = command;
                 cmdCopy.userLevel = UserRolesStringMap[`${cmdCopy.userLevel}`] as any;
                 commandsMap.set(file.split(".")[0].toLowerCase(), cmdCopy);
@@ -183,20 +261,20 @@ async function initBot(c) {
         console.log(`Client Connected!`)
         // await client.join(CHANNEL)
         // scheduledMessages.forEach(async sm => {
-            // let stream = await apiClient.streams.getStreamByUserName(process.env.CHANNEL);
-            let stream = true;
-            if (scheduledMessages.length > 0 && stream) {
-                let int = await setInterval(async () => {
-                    let filtered = await Promise.all(scheduledMessages.filter(async m => (await m.getContent()) !== null));
-                    let rand = Math.floor(Math.random() * filtered.length);
+        // let stream = await apiClient.streams.getStreamByUserName(process.env.CHANNEL);
+        let stream = true;
+        if (scheduledMessages.length > 0 && stream) {
+            let int = await setInterval(async () => {
+                let filtered = await Promise.all(scheduledMessages.filter(async m => (await m.getContent()) !== null));
+                let rand = Math.floor(Math.random() * filtered.length);
 
-                    let sm = scheduledMessages[rand];
+                let sm = scheduledMessages[rand];
 
-                    let content = await sm.getContent()
-                    if(content) await apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
-                }, scheduledMessageTimeout)
-                intervals.push(int);
-            }
+                let content = await sm.getContent()
+                if (content) await apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
+            }, scheduledMessageTimeout)
+            intervals.push(int);
+        }
         // })
     })
     c.onJoin((channel, user) => {
@@ -215,39 +293,52 @@ async function initBot(c) {
 
         console.log(content)
 
-        let dbUser = await userModel.findOne({twitchId: msg.userInfo.userId});
-        if(!dbUser) {
-            let pointsJson: {_total: number; users: {username: string; points: number;}[]} | null = null;
+        let dbUser = await userModel.findOne({ twitchId: msg.userInfo.userId });
+        if (!dbUser) {
+            let pointsJson: { _total: number; users: { username: string; points: number; }[] } | null = null;
             try {
                 pointsJson = readJSONSync(pointsBackupPath)
-            } catch(e) {
+            } catch (e) {
                 pointsJson = null;
             }
             let userPoints = pointsJson && pointsJson?.users && pointsJson.users.find(u => u.username.toLowerCase() === msg.userInfo.userName.toLowerCase()) ? pointsJson.users.find(u => u.username.toLowerCase() === msg.userInfo.userName.toLowerCase()).points : 0;
 
             let points = isBot ? 0 : userPoints;
             let role = UserRoles.DEFAULT;
-            if(msg.userInfo.isVip) role = UserRoles.VIP;
-            if(msg.userInfo.isMod) role = UserRoles.MOD;
-            if(msg.userInfo.isBroadcaster) role = UserRoles.BROADCASTER;
-            if(isBot) role = UserRoles.BOT;
+            if (msg.userInfo.isVip) role = UserRoles.VIP;
+            if (msg.userInfo.isMod) role = UserRoles.MOD;
+            if (msg.userInfo.isBroadcaster) role = UserRoles.BROADCASTER;
+            if (isBot) role = UserRoles.BOT;
 
-            await userModel.create({twitchId: msg.userInfo.userId, discordId: null, points: points, role: role});
+            await userModel.create({ twitchId: msg.userInfo.userId, discordId: null, points: points, role: role });
         } else {
             let role = UserRoles.DEFAULT;
-            if(msg.userInfo.isVip) role = UserRoles.VIP;
-            if(msg.userInfo.isMod) role = UserRoles.MOD;
-            if(msg.userInfo.isBroadcaster) role = UserRoles.BROADCASTER;
-            if(isBot) role = UserRoles.BOT;
+            if (msg.userInfo.isVip) role = UserRoles.VIP;
+            if (msg.userInfo.isMod) role = UserRoles.MOD;
+            if (msg.userInfo.isBroadcaster) role = UserRoles.BROADCASTER;
+            if (isBot) role = UserRoles.BOT;
             dbUser.role = role;
 
             await dbUser.save();
         }
 
-        if(isBot) return;
+        if (isBot) return;
+
+        if(!content.startsWith(prefix) && content.trim().toLowerCase().startsWith("pickme")) {
+            // Raffles
+            let raffle = getAllRaffles()?.[0];
+            if(raffle) {
+                let participants = getRaffleParticipants(raffle.id);
+                if(!participants.some(p => p.id === msg.userInfo.userId)) {
+                    createRaffleParticipant({raffle_id: raffle.id, id: msg.userInfo.userId});
+                    await reply(client, user, `@${msg.userInfo.displayName} joined the raffle for ${raffle.points.toLocaleString()} point${raffle.points === 1 ? "" : "s"}! Type "pickme" in chat for a chance to win!`, msg);
+                }
+            }
+        }
 
         console.log(`[${channel}] Message Sent by ${user} -> ${content}`)
         let cmd = content.toLowerCase().split(/ +/)[0]
+        let args: string[] = content.replace(cmd, "").trim().split(" ");
 
         let cmdNoPrefix = cmd.replace(prefix, "");
 
@@ -255,7 +346,99 @@ async function initBot(c) {
         if (commands !== null || commands.length > 0) {
             let customCmd = commands.find(c => c.trigger.toLowerCase() === cmd);
             if (customCmd) {
-                reply(client, user, customCmd.content, msg);
+                let content = customCmd.content;
+
+                // let regex = new RegExp(/((?:\{)([a-zA-Z]*)( ?)(.*)\b(?:\}))/gm);
+                let regex = /\{([a-zA-Z]\w*)( ({?[^{}]*)}?)?\}/gm;
+
+                let placeholders: string[][] | RegExpMatchArray = content.match(regex);
+                console.log(placeholders)
+                if(placeholders && placeholders.length > 0) placeholders = placeholders.map(p => {
+                    let split = p.replace("{", "").replace("}", "").split(/ +/);
+                    let plName = split[0];
+                    split.shift();
+
+                    return [plName, split[0] ? split.join(" ") : null];
+                });
+
+                console.log(placeholders)
+
+                
+
+                for (let i = 0; i < placeholders?.length || 0; i++) {
+                    const pl = placeholders[i];
+
+                    let replaceWith = "";
+                    switch (pl[0]) {
+                        case "random": {
+                            let randSplit: number[] = pl[1] ? pl[1].split("-").map(i => Number(i)) : [0, 10];
+
+                            let random = Math.floor(Math.random() * randSplit[1]);
+                            if (random < randSplit[0]) random = random + (randSplit[0] - random);
+                            replaceWith = random.toLocaleString();
+                            break;
+                        }
+
+                        case "weatherin": {
+                            let replaceArgs = pl[1].match(/{[0-9]}|{query}/gm);
+                            let query = pl[1];
+
+                            console.log("REPLACE", replaceArgs)
+
+                            if(replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+                                
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if(!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    console.log("ARG",arg)
+                                    query = pl[1].replaceAll(`{${argsIndex}}`, arg);
+                                    console.log("query", query);
+                                } else {
+                                    if(rawArgIndex.toLowerCase() === "query") {
+                                    console.log("ARG","QUERY")
+                                        query = pl[1].replaceAll("{query}", args.join(" "));
+                                        console.log("query", query);
+                                    }
+                                }
+                            })
+
+                            try {
+                                let forecast = await getWeather(query.trim() === "" ? "Hell norway" : query);
+                                replaceWith = `${forecast.temperature_c}° C | ${forecast.temperature_f}° F in ${forecast.region}`
+                            } catch(e) {
+                                replaceWith = `Error Fetching Weather`
+                            }
+
+                            break;
+                        }
+
+                        case "coinflip": {
+                            let m1 = crypto.getRandomValues(new Uint8Array(1));
+                            let rand = m1[0];
+
+                            console.log(rand);
+
+                            let isHeads = rand >= 100;
+
+                            replaceWith = isHeads ? "Heads" : "Tails";
+
+                            break;
+                        }
+
+                        case "sender": {
+                            replaceWith = `@${msg.userInfo.displayName}`;
+                            break;
+                        }
+                    }
+                    content = content.replace(`{${pl[0]}${pl[1] ? ` ${pl[1]}` : ""}}`, replaceWith)
+                }
+
+                // placeholders.forEach(async pl => {
+
+                // })
+
+                reply(client, user, content, msg);
             }
         }
 
@@ -274,6 +457,7 @@ async function initBot(c) {
             if (["editcmd", "editcommand", "changecommand",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(EditCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["setcode", "setroomcode", "src",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(SetRoomCodeCommand, client, user, content.split(cmd)[1], msg)
             if (["code", "roomcode", "rc", "join", "lobby", "room"].includes(cmdNoPrefix)) await runCommand(RoomCodeCommand, client, user, content.split(cmd)[1], msg)
+            if (["raffle"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(RaffleCommand, client, user, content.split(cmd)[1], msg)
             // if (["join"].includes(cmdNoPrefix)) await runCommand(JoinCommand, client, user, content.split(cmd)[1], msg)
 
         }

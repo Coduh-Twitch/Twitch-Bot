@@ -26,8 +26,8 @@ const scheduledMessages: ScheduledMessage[] = [
         getContent: async () => {
             let stream = await apiClient.streams.getStreamByUserName(process.env.CHANNEL);
             // if (!stream) return null;
-            let game: string = stream?.gameName;
-            game = "Jackbox Party Packs"
+            let game: string = stream?.gameName || "NOSTREAM";
+            // game = "Jackbox Party Packs"
             if (await getRoomCode()) {
                 if (game.includes("Mario Kart World")) {
                     return `Join the open lobby! | Online -> Friends -> Enter Room Code -> ${await getRoomCode()}`;

@@ -179,7 +179,11 @@ const PointsCommand: ChatCommand = {
                 points = dbTarget ? dbTarget.points : 0;
                 targetName = apiUser.name;
 
-                reply(client, user, `${targetName} has ${points.toLocaleString()} point${points === 1 ? "" : "s"}`, message)
+                let allUsers = (await userModel.find({points: {$gt: 0}})).sort((a,b) => b.points - a.points);
+                let theUser = allUsers.find(u => u.twitchId === dbTarget.twitchId);
+                let position = allUsers.indexOf(theUser) + 1;
+
+                reply(client, user, `${targetName} has ${points.toLocaleString()} point${points === 1 ? "" : "s"} and is rank ${position}/${allUsers.length} on the leaderboard!`, message)
             }
 
 
