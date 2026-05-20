@@ -14,6 +14,8 @@ const PointsCommand: ChatCommand = {
     subCommands: [
         {
             name: "add",
+            help: "Add points to a user",
+            userLevel: UserRoles.MOD,
             args: [
                 {
                     name: "username",
@@ -29,6 +31,8 @@ const PointsCommand: ChatCommand = {
         },
         {
             name: "remove",
+            help: "Remove points from a user",
+            userLevel: UserRoles.MOD,
             args: [
                 {
                     name: "username",
@@ -44,6 +48,8 @@ const PointsCommand: ChatCommand = {
         },
         {
             name: "set",
+            help: "Set a user's point balance",
+            userLevel: UserRoles.MOD,
             args: [
                 {
                     name: "username",
@@ -100,7 +106,7 @@ const PointsCommand: ChatCommand = {
         try {
             if(action && actions.includes(action)) {
 
-                if(!message.userInfo.isMod) return reply(client, user, `You must be Moderator or higher to do that.`, message)
+                if(!message.userInfo.isMod && !message.userInfo.isBroadcaster) return reply(client, user, `You must be Moderator or higher to do that.`, message)
 
                 // action
                 if(addActions.includes(action)) {

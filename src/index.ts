@@ -2,7 +2,7 @@ import "dotenv/config";
 import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
 import { ChatClient, ChatMessage } from "@twurple/chat"
 import { get, post } from "axios";
-import { ChatCommand, SearchedTrack, UserRolesStringMap } from "./classes/Types";
+import { ChatCommand, SearchedTrack, TwitchUser, UserRolesStringMap } from "./classes/Types";
 // import SongRequestCommand from "./commands/SongRequestCommand";
 // import QueueCommand from "./commands/QueueCommand";
 // import NowPlayingCommand from "./commands/NowPlayingCommand";
@@ -26,15 +26,16 @@ import { ensureFileSync, readJSONSync } from "fs-extra";
 import { join } from "path";
 import { cwd } from "process";
 import GambleCommandCommand from "./commands/GambleCommand";
-import { ApiClient } from "@twurple/api";
+import { ApiClient, HelixUser } from "@twurple/api";
 import PointsCommand from "./commands/PointsCommand";
 import SetRoomCodeCommand from "./commands/SetRoomCodeCommand";
 import RoomCodeCommand from "./commands/RoomCodeCommand";
-import { getWeather, pinMessage } from "./util";
+import { getFollowedDate, getGame, getUser, getWeather, pinMessage, setGame, setTags, setTitle, shoutout, timeAgo } from "./util";
 import { readdirSync } from "fs";
 import { createRaffleParticipant, deleteRaffle, getAllRaffles, getRaffleParticipants } from "./db/raffle";
 import RaffleCommand from "./commands/RaffleCommand";
 import { DBRaffle } from "./db/schema";
+import MoveCommandCommand from "./commands/MoveCommand";
 
 export interface SessionData {
     userId: string;
@@ -76,6 +77,10 @@ let sevenWarnings: Map<string, boolean> = new Map();
 export const authProvider = new RefreshingAuthProvider({ clientId: process.env.CLIENT_ID, clientSecret: process.env.CLIENT_SECRET });
 export const apiClient = new ApiClient({ authProvider });
 
+// Broadcaster Auth
+export let broadcasterAuthProvider: StaticAuthProvider | null = null;
+export let broadcasterApiClient: ApiClient | null = null;
+
 export const client: ChatClient = new ChatClient({ authProvider, channels: [CHANNEL], })
 let clientReady = false;
 // export const googleApi: GoogleAPI = new GoogleAPI(process.env.YOUTUBE_KEY);
@@ -94,6 +99,28 @@ setInterval(async () => {
     if (!client) {
         console.log(``)
         return;
+    }
+    if (!broadcasterAuthProvider) {
+        console.log("Initializing Broadcaster auth provider")
+        let sessionRes = await get(`${process.env.WEB_URL}/api/session?key=${process.env.CLIENT_SECRET}`);
+        console.log("SESSION", sessionRes.data)
+        if (!sessionRes || !sessionRes.data || !sessionRes.data?.data) {
+            console.log(`Broadcaster Auth Session not found.`)
+        } else {
+            let session: { user: TwitchUser | null; access_token: string | null; } = sessionRes.data.data;
+            if (session.user && session.access_token) {
+                if (session.user.id === process.env.CHANNEL_ID) {
+
+                    console.log(`Loading session for @${session.user.display_name}`);
+                    broadcasterAuthProvider = new StaticAuthProvider(process.env.CLIENT_ID, session.access_token);
+                    broadcasterApiClient = new ApiClient({ authProvider: broadcasterAuthProvider });
+                } else {
+                    console.log(`Broadcaster Auth ID does not match environment variable ${session.user.id} / ${process.env.CHANNEL_ID}`)
+                }
+            } else {
+                console.log(`Broadcaster Auth Session not found.`)
+            }
+        }
     }
     // console.log(client.isConnected ? "Connected" : client.isConnecting ? "Connecting..." : "Not connected")
     if (!client.isConnected) {
@@ -140,11 +167,11 @@ setInterval(async () => {
         let raffles = getAllRaffles();
         raffles = raffles.filter(r => !r.winner_id);
 
-        
-        if(raffles.length <= 0) {
-            if(sevenWarnings.size > 0) sevenWarnings.clear();
-            if(fifteenWarnings.size > 0) fifteenWarnings.clear();
-            if(fifteenWarnings.size > 0) thirtyWarnings.clear();
+
+        if (raffles.length <= 0) {
+            if (sevenWarnings.size > 0) sevenWarnings.clear();
+            if (fifteenWarnings.size > 0) fifteenWarnings.clear();
+            if (fifteenWarnings.size > 0) thirtyWarnings.clear();
         } else {
             console.log("RAFFLES", raffles);
         }
@@ -158,31 +185,31 @@ setInterval(async () => {
 
             let raffleExpiration = raffle.expires_at.getTime();
 
-            if(raffleExpiration <= thirtySeconds && !thirtyWarnings.has(raffle.id)) {
+            if (raffleExpiration <= thirtySeconds && !thirtyWarnings.has(raffle.id)) {
                 thirtyWarnings.set(raffle.id, true);
                 await reply(client, null, `The raffle expires in 30 seconds`)
             }
 
-            if(raffleExpiration <= fifteenSeconds && !fifteenWarnings.has(raffle.id)) {
+            if (raffleExpiration <= fifteenSeconds && !fifteenWarnings.has(raffle.id)) {
                 fifteenWarnings.set(raffle.id, true);
                 await reply(client, null, `The raffle expires in 15 seconds`)
             }
 
-            if(raffleExpiration <= sevenSeconds && !sevenWarnings.has(raffle.id)) {
+            if (raffleExpiration <= sevenSeconds && !sevenWarnings.has(raffle.id)) {
                 sevenWarnings.set(raffle.id, true);
                 await reply(client, null, `The raffle expires in 7 seconds`)
             }
 
-            if(raffleExpiration <= Date.now()) {
+            if (raffleExpiration <= Date.now()) {
                 let participants = getRaffleParticipants(raffle.id);
-                if(!raffle.winner_id) {
-                    if(participants && participants.length > 0) {
+                if (!raffle.winner_id) {
+                    if (participants && participants.length > 0) {
                         let randomInd = Math.floor(Math.random() * participants.length);
                         let winnerId = participants[randomInd] || participants[0];
                         let winner = await apiClient.users.getUserById(winnerId);
-                        if(winner) {
-                            let dbUser = await userModel.findOne({twitchId: winner.id});
-                            if(!dbUser) {
+                        if (winner) {
+                            let dbUser = await userModel.findOne({ twitchId: winner.id });
+                            if (!dbUser) {
                                 let newUser = new userModel({
                                     twitchId: winner.id,
                                     points: raffle.points,
@@ -241,7 +268,7 @@ app.use(json());
 app.use("/api", apiRouter)
 app.use("/auth", AuthRoute)
 
-async function initBot(c) {
+async function initBot(c: ChatClient) {
     c.onConnect(async () => {
         console.log("Initializing Local Websocket Server")
         if (client.isConnected && !websocket.initialized) await websocket.initServerAndSocket();
@@ -252,6 +279,9 @@ async function initBot(c) {
             if (command && command.help && command.enabled) {
                 let cmdCopy = command;
                 cmdCopy.userLevel = UserRolesStringMap[`${cmdCopy.userLevel}`] as any;
+                (cmdCopy.subCommands || []).forEach(subcommand => {
+                    subcommand.userLevel = UserRolesStringMap[`${subcommand.userLevel}`] as any;
+                })
                 commandsMap.set(file.split(".")[0].toLowerCase(), cmdCopy);
             }
         })
@@ -281,7 +311,10 @@ async function initBot(c) {
         console.log(`[${user}] Joined Channel -> ${channel}`)
     })
 
-
+    c.onRaid(async (channel, raider, raid, msg) => {
+        let game = await getGame(raider);
+        reply(c, null, `DinoDance @${raider} thank you for the RAID! ${raider} just brought in ${raid.viewerCount.toLocaleString()} viewer${raid.viewerCount === 1 ? "" : "s"}${game ? ` from their ${game} stream!` : "!"} PewPewPew`)
+    })
 
     c.onMessage(async (channel, user, content, msg: ChatMessage) => {
         let pointsBackupPath = join(cwd(), "data", "streamElementsExport.json");
@@ -293,6 +326,7 @@ async function initBot(c) {
 
         console.log(content)
 
+        if (isBot) return;
         let dbUser = await userModel.findOne({ twitchId: msg.userInfo.userId });
         if (!dbUser) {
             let pointsJson: { _total: number; users: { username: string; points: number; }[] } | null = null;
@@ -322,16 +356,20 @@ async function initBot(c) {
             await dbUser.save();
         }
 
-        if (isBot) return;
 
-        if(!content.startsWith(prefix) && content.trim().toLowerCase().startsWith("pickme")) {
+        if (!content.startsWith(prefix) && content.trim().toLowerCase().startsWith("pickme")) {
             // Raffles
             let raffle = getAllRaffles()?.[0];
-            if(raffle) {
+            if (raffle) {
                 let participants = getRaffleParticipants(raffle.id);
-                if(!participants.some(p => p.id === msg.userInfo.userId)) {
-                    createRaffleParticipant({raffle_id: raffle.id, id: msg.userInfo.userId});
-                    await reply(client, user, `@${msg.userInfo.displayName} joined the raffle for ${raffle.points.toLocaleString()} point${raffle.points === 1 ? "" : "s"}! Type "pickme" in chat for a chance to win!`, msg);
+
+                if (!participants.some(p => p.id === msg.userInfo.userId)) {
+                    if (participants && (participants.length <= 0 && raffle.creator_id === msg.userInfo.userId)) {
+                        reply(client, user, `Someone else has to join the raffle before you can join!`, msg)
+                    } else {
+                        createRaffleParticipant({ raffle_id: raffle.id, id: msg.userInfo.userId });
+                        await reply(client, user, `@${msg.userInfo.displayName} joined the raffle for ${raffle.points.toLocaleString()} point${raffle.points === 1 ? "" : "s"}! Type "pickme" in chat for a chance to win!`, msg);
+                    }
                 }
             }
         }
@@ -346,32 +384,275 @@ async function initBot(c) {
         if (commands !== null || commands.length > 0) {
             let customCmd = commands.find(c => c.trigger.toLowerCase() === cmd);
             if (customCmd) {
+                let userLevel = customCmd.userLevel || UserRolesStringMap[`${UserRoles.DEFAULT}`];
+
+                function checkPermission(role: "vip" | "mod" | "bot" | "broadcaster", checkBroadcaster: boolean = true): boolean {
+                    if(checkBroadcaster && msg.userInfo.isBroadcaster) return true;
+                    if(role === "vip" && (msg.userInfo.isVip || msg.userInfo.isMod)) return true;
+                    if(role === "broadcaster" && msg.userInfo.isBroadcaster) return true;
+                    if(role === "mod" && msg.userInfo.isMod) return true;
+                    if(role === "bot" && msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase()) return true;
+
+                    return false;
+                }
+
+                if(userLevel !== "Viewer") {
+                    if(!checkPermission(userLevel.toLowerCase() as any, true)) return await reply(c, user, `You must be ${userLevel} or higher to do that!`, msg)
+                } 
+
                 let content = customCmd.content;
 
                 // let regex = new RegExp(/((?:\{)([a-zA-Z]*)( ?)(.*)\b(?:\}))/gm);
-                let regex = /\{([a-zA-Z]\w*)( ({?[^{}]*)}?)?\}/gm;
+                // let regex = /\{([a-zA-Z]\w*)(\s+((\{[^\}]*\}|[^\}])*))?\}/gm;
+                // let regex = /\{([a-zA-Z]\w*)( ({?[^\{\}]*)}?)?\}/gm;
 
-                let placeholders: string[][] | RegExpMatchArray = content.match(regex);
-                console.log(placeholders)
-                if(placeholders && placeholders.length > 0) placeholders = placeholders.map(p => {
-                    let split = p.replace("{", "").replace("}", "").split(/ +/);
-                    let plName = split[0];
-                    split.shift();
+                // let regex = /\{([a-zA-Z]\w*)(?:\s+((?:\{[^{}]*\}|[^{}])*))?\}/gm;
 
-                    return [plName, split[0] ? split.join(" ") : null];
-                });
+                // let placeholders: string[][] | RegExpMatchArray = content.match(regex);
+                // console.log(placeholders)
+                // if (placeholders && placeholders.length > 0) placeholders = placeholders.map(p => {
+                //     let split = p
+                //     // .replace("{", "").replace("}", "")
+                //     .split(/ +/);
+                //     if(split[0].startsWith("{")) split[0] = split[0].replace("{","");
+                //     if(split[0].endsWith("}")) split[0] = split[0].slice(0, split[0].length - 1)
+                //     if(split[1] && split[1].endsWith("}")) split[1] = split[1].slice(0, split[1].length - 1);
+                //     let plName = split[0];
+                //     split.shift();
 
-                console.log(placeholders)
+                //     return [plName, split[0] ? split.join(" ") : null];
+                // });
 
-                
+                // console.log("PLACEHOLDERS", placeholders)
 
-                for (let i = 0; i < placeholders?.length || 0; i++) {
-                    const pl = placeholders[i];
 
+                // for (let i = 0; i < placeholders?.length || 0; i++) {
+                //     const pl: string[] = placeholders[i] as string[];
+                //     console.log("PL", pl)
+                //     // if(pl[1] && pl[1].endsWith("}")) pl[1] = pl[1].slice(0, pl[1].length - 1);
+
+                //     let replaceWith = "";
+                //     switch (pl[0]) {
+                //         case "random": {
+                //             let randSplit: number[] = pl[1] ? pl[1].split("-").map(i => Number(i)) : [0, 10];
+
+                //             let random = Math.floor(Math.random() * randSplit[1]);
+                //             if (random < randSplit[0]) random = random + (randSplit[0] - random);
+                //             replaceWith = random.toLocaleString();
+                //             break;
+                //         }
+
+                //         case "weatherin": {
+                //             let replaceArgs = pl[1].match(/{[0-9]}|{query}/gm);
+                //             let query = pl[1];
+
+                //             if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                //                 let rawArgIndex = a.replace("{", "").replace("}", "");
+                //                 let argsIndex = Number(rawArgIndex);
+                //                 if (!Number.isNaN(argsIndex)) {
+                //                     let arg = args[argsIndex];
+                //                     query = pl[1].replaceAll(`{${argsIndex}}`, arg);
+                //                 } else {
+                //                     if (rawArgIndex.toLowerCase() === "query") {
+                //                         query = pl[1].replaceAll("{query}", args.join(" "));
+                //                     }
+                //                 }
+                //             })
+
+                //             try {
+                //                 let forecast = await getWeather(query.trim() === "" ? "Hell norway" : query);
+                //                 replaceWith = `${forecast.temperature_c}° C | ${forecast.temperature_f}° F in ${forecast.region}`
+                //             } catch (e) {
+                //                 replaceWith = `Error Fetching Weather`
+                //             }
+
+                //             break;
+                //         }
+
+                //         case "coinflip": {
+                //             let m1 = crypto.getRandomValues(new Uint8Array(1));
+                //             let rand = m1[0];
+
+                //             console.log(rand);
+
+                //             let isHeads = rand >= 100;
+
+                //             replaceWith = isHeads ? "Heads" : "Tails";
+
+                //             break;
+                //         }
+
+                //         case "sender": {
+                //             replaceWith = `@${msg.userInfo.displayName}`;
+                //             break;
+                //         }
+
+                //         case "touser": {
+                //             // let replaceArgs = pl[1].match(/args/gm);
+                //             let mention = args?.[0] || msg.userInfo.userName;
+                //             replaceWith = `${mention.replaceAll("@", "").toLowerCase()}`;
+
+                //             break;
+                //         }
+
+                //         case "game": {
+                //             let replaceArgs = pl[1].match(/{[0-9]}|{sender}|{touser}/gm);
+                //             let query = pl[1];
+
+                //             if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                //                 let rawArgIndex = a.replace("{", "").replace("}", "");
+                //                 let argsIndex = Number(rawArgIndex);
+                //                 if (!Number.isNaN(argsIndex)) {
+                //                     let arg = args[argsIndex];
+                //                     console.log("ARG", arg)
+                //                     query = pl[1].replaceAll(`{${argsIndex}}`, arg);
+                //                     console.log("query", query);
+                //                 } else {
+                //                     if (rawArgIndex.toLowerCase() === "sender") {
+                //                         query = pl[1].replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                //                     }
+                //                     if (rawArgIndex.toLowerCase() === "touser") {
+                //                         let mention = args?.[0] || msg.userInfo.userName;
+                //                         query = pl[1].replaceAll("{touser}", mention.replaceAll("@", ""));
+                //                     }
+                //                 }
+                //             })
+
+                //             try {
+                //                 query = query.replaceAll("@", "");
+                //                 let game = await getGame(query);
+                //                 replaceWith = game || "Error Fetching Stream";
+                //             } catch (e) {
+                //                 replaceWith = `Error Fetching Stream`;
+                //             }
+
+                //             break;
+                //         }
+
+                //         case "shoutout": {
+                //             let replaceArgs = pl[1].match(/{[0-9]}|{sender}|{touser}/gm);
+                //             let query = pl[1];
+
+                //             if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                //                 let rawArgIndex = a.replace("{", "").replace("}", "");
+                //                 let argsIndex = Number(rawArgIndex);
+                //                 if (!Number.isNaN(argsIndex)) {
+                //                     let arg = args[argsIndex];
+                //                     console.log("ARG", arg)
+                //                     query = pl[1].replaceAll(`{${argsIndex}}`, arg);
+                //                     console.log("query", query);
+                //                 } else {
+                //                     if (rawArgIndex.toLowerCase() === "sender") {
+                //                         query = pl[1].replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                //                     }
+                //                     if (rawArgIndex.toLowerCase() === "touser") {
+                //                         let mention = args?.[0] || msg.userInfo.userName;
+                //                         query = pl[1].replaceAll("{touser}", mention.replaceAll("@", ""));
+                //                     }
+                //                 }
+                //             })
+
+                //             try {
+                //                 query = query.replaceAll("@", "");
+                //                 let shout = await shoutout(query);
+                //                 replaceWith = shout ? "" : "Error Shouting Out";
+                //             } catch (e) {
+                //                 replaceWith = `Error Shouting Out`;
+                //             }
+
+                //             break;
+                //         }
+
+                //         case "setgame": {
+                //             let replaceArgs = pl[1].match(/{[0-9]}|{query}/);
+                //             let query = pl[1];
+
+                //             if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                //                 let rawArgIndex = a.replace("{", "").replace("}", "");
+                //                 let argsIndex = Number(rawArgIndex);
+                //                 if (!Number.isNaN(argsIndex)) {
+                //                     let arg = args[argsIndex];
+                //                     query = pl[1].replaceAll(`{${argsIndex}}`, arg);
+                //                 } else {
+                //                     if (rawArgIndex.toLowerCase() === "query") {
+                //                         query = pl[1].replaceAll("{query}", args.join(" "));
+                //                     }
+                //                 }
+                //             })
+
+                //             try {
+                //                 let gameSet = await setGame(query.trim());
+                //                 replaceWith = gameSet ? gameSet : "Error Setting Game"
+                //             } catch (e) {
+                //                 replaceWith = `Error Setting Game`
+                //             }
+
+                //             break;
+                //         }
+
+                //         case "title": {
+                //             console.log("SET TITLE", pl)
+                //             let replaceArgs = pl[1].match(/{[0-9]}|{query}/);
+                //             let query = pl[1];
+
+                //             if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                //                 let rawArgIndex = a.replace("{", "").replace("}", "");
+                //                 let argsIndex = Number(rawArgIndex);
+                //                 if (!Number.isNaN(argsIndex)) {
+                //                     let arg = args[argsIndex];
+                //                     query = pl[1].replaceAll(`{${argsIndex}}`, arg);
+                //                 } else {
+                //                     if (rawArgIndex.toLowerCase() === "query") {
+                //                         query = pl[1].replaceAll("{query}", args.join(" "));
+                //                     }
+                //                 }
+                //             })
+
+                //             try {
+                //                 let titleSet = await setTitle(query.trim());
+                //                 replaceWith = titleSet ? titleSet : "Error Setting Title"
+                //             } catch (e) {
+                //                 replaceWith = `Error Setting Title`
+                //             }
+
+                //             break;
+                //         }
+
+                //     }
+                //     content = content.replace(`{${pl[0]}${pl[1] ? ` ${pl[1]}` : ""}}`, replaceWith);
+                // }
+
+                // placeholders.forEach(async pl => {
+
+                // })
+
+                const regex = /\{([a-zA-Z]\w*)(?:\s+((?:\{[^{}]*\}|[^{}])+))?\}/gm;
+
+                let match;
+                const results = [];
+
+                regex.lastIndex = 0;
+
+                while ((match = regex.exec(content)) !== null) {
+                    const fullMatch = match[0];   
+                    const tagName = match[1]; 
+                    const tagContent = match[2] || "";
+
+                    results.push({ fullMatch, tagName, tagContent });
+                }
+
+                for (const placeholder of results) {
                     let replaceWith = "";
-                    switch (pl[0]) {
+                    const { tagName, tagContent, fullMatch } = placeholder;
+
+                    switch (tagName) {
                         case "random": {
-                            let randSplit: number[] = pl[1] ? pl[1].split("-").map(i => Number(i)) : [0, 10];
+                            let randSplit: number[] = tagContent ? tagContent.split("-").map((i: string) => Number(i.trim())) : [0, 10];
 
                             let random = Math.floor(Math.random() * randSplit[1]);
                             if (random < randSplit[0]) random = random + (randSplit[0] - random);
@@ -380,33 +661,27 @@ async function initBot(c) {
                         }
 
                         case "weatherin": {
-                            let replaceArgs = pl[1].match(/{[0-9]}|{query}/gm);
-                            let query = pl[1];
+                            let replaceArgs = tagContent.match(/{[0-9]}|{query}/gm);
+                            let query = tagContent;
 
-                            console.log("REPLACE", replaceArgs)
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
 
-                            if(replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
-                                
                                 let rawArgIndex = a.replace("{", "").replace("}", "");
                                 let argsIndex = Number(rawArgIndex);
-                                if(!Number.isNaN(argsIndex)) {
+                                if (!Number.isNaN(argsIndex)) {
                                     let arg = args[argsIndex];
-                                    console.log("ARG",arg)
-                                    query = pl[1].replaceAll(`{${argsIndex}}`, arg);
-                                    console.log("query", query);
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
                                 } else {
-                                    if(rawArgIndex.toLowerCase() === "query") {
-                                    console.log("ARG","QUERY")
-                                        query = pl[1].replaceAll("{query}", args.join(" "));
-                                        console.log("query", query);
+                                    if (rawArgIndex.toLowerCase() === "query") {
+                                        query = query.replaceAll("{query}", args.join(" "));
                                     }
                                 }
                             })
 
                             try {
                                 let forecast = await getWeather(query.trim() === "" ? "Hell norway" : query);
-                                replaceWith = `${forecast.temperature_c}° C | ${forecast.temperature_f}° F in ${forecast.region}`
-                            } catch(e) {
+                                replaceWith = `${forecast.emoji} ${forecast.temperature_c}° C | ${forecast.temperature_f}° F in ${forecast.region}`
+                            } catch (e) {
                                 replaceWith = `Error Fetching Weather`
                             }
 
@@ -430,13 +705,268 @@ async function initBot(c) {
                             replaceWith = `@${msg.userInfo.displayName}`;
                             break;
                         }
+
+                        case "channel": {
+                            replaceWith = channel;
+                            break;
+                        }
+
+                        case "touser": {
+                            let mention = args?.[0] || msg.userInfo.userName;
+                            replaceWith = `${mention.replaceAll("@", "").toLowerCase()}`;
+
+                            break;
+                        }
+
+                        case "game": {
+                            let replaceArgs = tagContent.match(/{[0-9]}|{sender}|{touser}/gm);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    console.log("ARG", arg)
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                    console.log("query", query);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "sender") {
+                                        query = query.replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                                    }
+                                    if (rawArgIndex.toLowerCase() === "touser") {
+                                        let mention = args?.[0] || msg.userInfo.userName;
+                                        query = query.replaceAll("{touser}", mention.replaceAll("@", ""));
+                                    }
+                                }
+                            })
+
+                            try {
+                                query = query.replaceAll("@", "");
+                                let game = await getGame(query);
+                                replaceWith = game || "Error Fetching Stream";
+                            } catch (e) {
+                                replaceWith = `Error Fetching Stream`;
+                            }
+
+                            break;
+                        }
+
+                        case "shoutout": {
+                            let replaceArgs = tagContent.match(/{[0-9]}|{sender}|{touser}/gm);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    console.log("ARG", arg)
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                    console.log("query", query);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "sender") {
+                                        query = query.replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                                    }
+                                    if (rawArgIndex.toLowerCase() === "touser") {
+                                        let mention = args?.[0] || msg.userInfo.userName;
+                                        query = query.replaceAll("{touser}", mention.replaceAll("@", ""));
+                                    }
+                                }
+                            })
+
+                            try {
+                                query = query.replaceAll("@", "");
+                                let shout = await shoutout(query);
+                                replaceWith = shout ? "" : "Error Shouting Out";
+                            } catch (e) {
+                                replaceWith = `Error Shouting Out`;
+                            }
+
+                            break;
+                        }
+
+                        case "setgame": {
+                            let replaceArgs = tagContent.match(/{[0-9]}|{query}/);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "query") {
+                                        query = query.replaceAll("{query}", args.join(" "));
+                                    }
+                                }
+                            })
+
+                            try {
+                                let gameSet = await setGame(query.trim());
+                                replaceWith = gameSet ? gameSet : "Error Setting Game"
+                            } catch (e) {
+                                replaceWith = `Error Setting Game`
+                            }
+
+                            break;
+                        }
+
+                        case "settitle": {
+                            console.log("SET TITLE", [tagName, tagContent])
+                            let replaceArgs = tagContent.match(/{[0-9]}|{query}/);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "query") {
+                                        query = query.replaceAll("{query}", args.join(" "));
+                                    }
+                                }
+                            })
+
+                            try {
+                                if(query.includes("{") || query.includes("}")) {
+                                    replaceWith = "Title may not contain curly braces"
+                                } else {
+                                    let titleSet = await setTitle(query.trim());
+                                    replaceWith = titleSet ? titleSet : "Error Setting Title"
+                                }
+                            } catch (e) {
+                                replaceWith = `Error Setting Title`
+                            }
+
+                            break;
+                        }
+
+                        case "settags": {
+                            console.log("SET TAGS", [tagName, tagContent])
+                            let replaceArgs = tagContent.match(/{[0-9]}|{query}/);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "query") {
+                                        query = query.replaceAll("{query}", args.join(" "));
+                                    }
+                                }
+                            })
+
+                            try {
+                                if(query.includes("{") || query.includes("}")) {
+                                    replaceWith = "Tags may not contain curly braces"
+                                } else {
+                                    let tagSplit = query.split(",").map(q => q.trim().replaceAll(" ", ""));
+                                    if(tagSplit.length > 0) {
+                                        console.log("TAGS", tagSplit)
+                                        let tagSet = await setTags(tagSplit);
+                                        replaceWith = tagSet.length > 0 ? tagSet.join(", ") : "Error Setting Tags"
+                                    } else replaceWith = "Error Setting Tags"
+                                }
+                            } catch (e) {
+                                replaceWith = `Error Setting Tags`
+                            }
+
+                            break;
+                        }
+
+                        case "accountage": {
+                            let replaceArgs = tagContent.match(/{[0-9]}|{sender}|{touser}/gm);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    console.log("ARG", arg)
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                    console.log("query", query);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "sender") {
+                                        query = query.replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                                    }
+                                    if (rawArgIndex.toLowerCase() === "touser") {
+                                        let mention = args?.[0] || msg.userInfo.userName;
+                                        query = query.replaceAll("{touser}", mention.replaceAll("@", ""));
+                                    }
+                                }
+                            })
+
+                            // let timeFormatter = Intl.DateTimeFormat("en-US", {
+                                
+                            // })
+
+                            try {
+                                query = query.replaceAll("@", "");
+                                let user = await getUser(query !== "" ? query : msg.userInfo.userName);
+                                replaceWith = user ? `${timeAgo(user.creationDate)}` : `Error Fetching User`;
+                            } catch (e) {
+                                replaceWith = `Error Fetching User`;
+                            }
+
+                            break;
+                        }
+
+                        case "followage": {
+                            let replaceArgs = tagContent.match(/{[0-9]}|{sender}|{touser}/gm);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    console.log("ARG", arg)
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                    console.log("query", query);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "sender") {
+                                        query = query.replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                                    }
+                                    if (rawArgIndex.toLowerCase() === "touser") {
+                                        let mention = args?.[0] || msg.userInfo.userName;
+                                        query = query.replaceAll("{touser}", mention.replaceAll("@", ""));
+                                    }
+                                }
+                            })
+
+                            // let timeFormatter = Intl.DateTimeFormat("en-US", {
+                                
+                            // })
+
+                            try {
+                                query = query.replaceAll("@", "");
+                                let followedDate = await getFollowedDate(query !== "" ? query : msg.userInfo.userName);
+                                replaceWith = followedDate ? `${timeAgo(followedDate)}` : `never`;
+                            } catch (e) {
+                                replaceWith = `never`;
+                            }
+
+                            break;
+                        }
+
                     }
-                    content = content.replace(`{${pl[0]}${pl[1] ? ` ${pl[1]}` : ""}}`, replaceWith)
+                    content = content.replace(`{${tagName}${tagContent ? ` ${tagContent}` : ""}}`, replaceWith);
                 }
-
-                // placeholders.forEach(async pl => {
-
-                // })
 
                 reply(client, user, content, msg);
             }
@@ -456,6 +986,7 @@ async function initBot(c) {
             if (["delcommand", "deletecommand", "removecommand", "delcmd"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(DeleteCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["editcmd", "editcommand", "changecommand",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(EditCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["setcode", "setroomcode", "src",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(SetRoomCodeCommand, client, user, content.split(cmd)[1], msg)
+            if (["movecmd", "mvcommand", "swapcmd", "swapcommand", "movecommand"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(MoveCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["code", "roomcode", "rc", "join", "lobby", "room"].includes(cmdNoPrefix)) await runCommand(RoomCodeCommand, client, user, content.split(cmd)[1], msg)
             if (["raffle"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(RaffleCommand, client, user, content.split(cmd)[1], msg)
             // if (["join"].includes(cmdNoPrefix)) await runCommand(JoinCommand, client, user, content.split(cmd)[1], msg)

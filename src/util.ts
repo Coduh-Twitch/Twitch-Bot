@@ -1,8 +1,12 @@
 import { get, post } from "axios";
-import { apiClient, client, SOCIAL_LINKS } from ".";
+import { apiClient, authProvider, broadcasterApiClient, client, SOCIAL_LINKS } from ".";
 import { userModel } from "./models/user";
 import { sessionModel } from "./models/session";
 import { Message } from "ircv3";
+import { HelixChannelFollower, HelixStream, HelixUser } from "@twurple/api";
+import { ensureDirSync, ensureFileSync, writeJSONSync } from "fs-extra";
+import { join } from "path";
+import { DataObject, getRawData } from "@twurple/common";
 
 export const getDiscordCta = async (): Promise<string> => {
     const guildInvite = "cTVvyh3zke"
@@ -55,14 +59,148 @@ export const pinMessage = async (messageId: string): Promise<boolean> => {
     }
 }
 
-export const getWeather = async (location: string): Promise<{temperature_c: number; temperature_f: number; region: string; }> => {
+export const getWeather = async (location: string): Promise<{temperature_c: number; temperature_f: number; region: string; emoji: string; }> => {
     // https://wttr.in/$LOCATION?format=1
     let res = await get(`https://wttr.in/${encodeURIComponent(location)}?format=j1`);
-    if(!res.data) return {temperature_c: 0, temperature_f: 0, region: "Region not found"};
+    if(!res.data) return {temperature_c: 0, temperature_f: 0, region: "Region not found", emoji: "NotLikeThis"};
+
+    let emoji = await get(`https://wttr.in/${encodeURIComponent(location)}?format=%c`);
+    if(!emoji.data) return {temperature_c: 0, temperature_f: 0, region: "Region not found", emoji: "NotLikeThis"};
+
+    // ensureDirSync(join(process.cwd(), "tmp"))
+    // ensureFileSync(join(process.cwd(), "tmp", "forecast.json"))
+    // writeJSONSync(join(process.cwd(), "tmp", "forecast.json"), res.data, {encoding: "utf8"})
 
     return {
         temperature_c: res.data.current_condition?.[0].temp_C,
         temperature_f: res.data.current_condition?.[0].temp_F,
-        region: res.data.nearest_area[0].areaName[0].value
+        region: res.data.nearest_area[0].areaName[0].value,
+        emoji: emoji.data
     }
 }
+
+export const getGame = async (username: string): Promise<string | null> => {
+    let stream: HelixStream | HelixStream[] = await apiClient.streams.getStreamsByUserNames([username]);
+    if(stream?.[0]) stream = stream[0];
+    let apiUser = await apiClient.users.getUserByName(username);
+    let apiChannel = await apiClient.channels.getChannelInfoById(apiUser.id);
+
+    return (stream as HelixStream)?.gameName || apiChannel?.gameName || null;
+}
+
+export const setGame = async (gameName: string): Promise<string | null> => {
+    if(!broadcasterApiClient) return null;
+    try {
+        // let stream = await apiClient.streams.getStreamByUserId(process.env.CHANNEL_ID);
+        // if(!stream) return null;
+        let game = await apiClient.games.getGameByName(gameName);
+        if(!game) return null;
+        await broadcasterApiClient.channels.updateChannelInfo(process.env.CHANNEL_ID, {gameId: game.id});
+        return game.name;
+    } catch(e) {
+        console.log("ERROR SETTING GAME", e)
+        return null;
+    }
+}
+
+export const setTitle = async (newTitle: string): Promise<string | null> => {
+    if(!broadcasterApiClient) return null;
+    try {
+        await broadcasterApiClient.channels.updateChannelInfo(process.env.CHANNEL_ID, {title: newTitle});
+        return newTitle;
+    } catch(e) {
+        console.log("ERROR SETTING TITLE", e)
+        return null;
+    }
+}
+
+export const setTags = async (tags: string[]): Promise<string[]> => {
+    if(!broadcasterApiClient) return [];
+    if(tags.length <= 0) return [];
+    try {
+        await broadcasterApiClient.channels.updateChannelInfo(process.env.CHANNEL_ID, {tags: tags});
+        return tags;
+    } catch(e) {
+        console.log("ERROR SETTING TITLE", e)
+        return [];
+    }
+}
+
+export const shoutout = async (username: string): Promise<boolean> => {
+    try {
+        let apiUser = await apiClient.users.getUserByName(username);
+        if(!apiUser) return false;
+        await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+            await ctx.chat.shoutoutUser(process.env.CHANNEL_ID, apiUser.id);
+        })
+        return true;
+    } catch(e) {
+        console.log(e);
+        return false;
+    }
+}
+
+export const getUser = async (login: string): Promise<HelixUser | null> => {
+    try {
+        let apiUser = await apiClient.users.getUserByName(login);
+        if(!apiUser) return null;
+        
+        return apiUser;
+    } catch(e) {
+        console.log(e);
+        return null;
+    }
+}
+
+export const getFollowedDate = async (login: string): Promise<Date | null> => {
+    try {
+        let apiUser = await apiClient.users.getUserByName(login);
+        if(!apiUser) return null;
+        
+        let broadcasterFollowers = await broadcasterApiClient.channels.getChannelFollowers(process.env.CHANNEL_ID);
+        // console.log(broadcasterFollowers.data)
+        if(!broadcasterFollowers.data || broadcasterFollowers.data.length <= 0) return null;
+
+        let apiFollower = broadcasterFollowers.data.find(f => f.userId === apiUser.id);
+        
+
+        return apiFollower?.followDate || null;
+    } catch(e) {
+        console.log(e);
+        return null;
+    }
+}
+
+
+export const timeAgo = (date: Date) => {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  let interval = Math.floor(seconds / 31536000);
+  if (interval > 1) {
+    return interval + ' years ago';
+  }
+
+  interval = Math.floor(seconds / 2592000);
+  if (interval > 1) {
+    return interval + ' months ago';
+  }
+
+  interval = Math.floor(seconds / 86400);
+  if (interval > 1) {
+    return interval + ' days ago';
+  }
+
+  interval = Math.floor(seconds / 3600);
+  if (interval > 1) {
+    return interval + ' hours ago';
+  }
+
+  interval = Math.floor(seconds / 60);
+  if (interval > 1) {
+    return interval + ' minutes ago';
+  }
+
+  if(seconds < 10) return 'just now';
+
+  return Math.floor(seconds) + ' seconds ago';
+};

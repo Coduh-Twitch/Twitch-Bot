@@ -59,7 +59,7 @@ AuthRoute.get("/", async (req, res) => {
             console.log(e)
         }
     } else {
-        let scopes = ["user:write:chat", "user:read:chat", "chat:read", "chat:edit", "user:bot", "channel:bot", "moderator:manage:announcements"];
+        let scopes = ["user:write:chat", "user:read:chat", "chat:read", "chat:edit", "user:bot", "channel:bot", "moderator:manage:announcements", "moderator:manage:shoutouts"];
 
         res.redirect(`https://id.twitch.tv/oauth2/authorize?client_id=${process.env.CLIENT_ID}&redirect_uri=${process.env.APP_URL}/auth&scope=${scopes.join(" ")}&response_type=code`)
     }

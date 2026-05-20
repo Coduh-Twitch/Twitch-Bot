@@ -2,6 +2,22 @@ import { Router } from "express";
 import { CHANNEL, client, commandsMap, reply } from "..";
 import { get, post } from "axios";
 import { pollModel } from "../models/polls";
+import { customCommandModel } from "../models/command";
+
+function ordinal_suffix_of(i: number) {
+    let j = i % 10,
+        k = i % 100;
+    if (j === 1 && k !== 11) {
+        return i.toLocaleString() + "st";
+    }
+    if (j === 2 && k !== 12) {
+        return i.toLocaleString() + "nd";
+    }
+    if (j === 3 && k !== 13) {
+        return i.toLocaleString() + "rd";
+    }
+    return i.toLocaleString() + "th";
+}
 
 const apiRouter = Router();
 
@@ -54,13 +70,24 @@ apiRouter.post("/polls/end/:id", async (req, res) => {
 
     await client.say(CHANNEL, `| 👑 WINNER -> ${choices[0].text} (${choices[0].votes} vote${choices[0].votes === 1 ? "" : "s"})`)
     if(choices[1].votes > 0) await client.action(CHANNEL, `| 🥈 RUNNER-UP -> ${choices[1].text} (${choices[1].votes} vote${choices[1].votes === 1 ? "" : "s"})`)
-
-    
 })
 
 apiRouter.get("/commands", async (req, res) => {
     if(!commandsMap || commandsMap.size <= 0) return res.sendStatus(404);
     res.send({commands: [...commandsMap.values()]})
+});
+
+apiRouter.get("/custom-commands", async (req, res) => {
+    let commands = await customCommandModel.find();
+    if(!commands || commands.length <= 0) return res.sendStatus(404);
+    res.send({commands})
+});
+
+apiRouter.post("/discord/new-member", async (req, res) => {
+    let json = req.body;
+    if(!json?.username) return res.sendStatus(401);
+    if(!json?.memberCount) return res.sendStatus(401);
+    await reply(client, null, `@${json.username} joined the Discord! They are the ${ordinal_suffix_of(json.memberCount as number)} member! -> Join with !discord`)
 })
 
 export default apiRouter;
