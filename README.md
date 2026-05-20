@@ -9,7 +9,7 @@
 
 ---
 
-# Twitch-Chatbot
+# Twitch-Bot
 A Twitch chatbot utilizing broadcaster auth for extended features.
 
 Features include custom commands with variables, a points system, the abililty to sync polls with Discord, and more! 
