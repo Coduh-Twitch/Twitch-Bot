@@ -17,9 +17,9 @@ export const getDiscordCta = async (): Promise<string> => {
             const profile = discordData.profile;
             const members: number = profile.member_count || 0;
 
-    return `${members.toLocaleString()} LOCAL MILF${members === 1 ? "" : "S"} IN YOUR AREA! CLICK THE LINK TO FIND LOCALS NEAR YOU | ${SOCIAL_LINKS.discord}`;
+    return `${members.toLocaleString()} HOT SINGLE${members === 1 ? "" : "S"} IN YOUR AREA! CLICK THE LINK TO FIND LOCALS NEAR YOU | ${SOCIAL_LINKS.discord}`;
     } else {
-        return `HOT MILFS IN YOUR AREA! CLICK THE LINK TO FIND LOCALS NEAR YOU | ${SOCIAL_LINKS.discord}`;
+        return `HOT SINGLES IN YOUR AREA! CLICK THE LINK TO FIND LOCALS NEAR YOU | ${SOCIAL_LINKS.discord}`;
     }
 }
 

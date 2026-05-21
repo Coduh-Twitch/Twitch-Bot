@@ -19,6 +19,7 @@
     "@twurple/auth": "^7.4.0",
     "@twurple/chat": "^7.4.0",
     "@twurple/common": "^8.1.4",
+    "@twurple/eventsub-ws": "^7.4.0",
     "@types/express": "^5.0.3",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.10.0",

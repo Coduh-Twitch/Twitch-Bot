@@ -7,7 +7,7 @@ import { UserRoles } from "../models/user";
 const EditCommandCommand: ChatCommand = {
     enabled: true,
     name: "editcommand",
-    aliases: ["editcmd", "changecommand"],
+    aliases: ["editcmd", "changecommand", "ec"],
     help: "Edit a previously created custom command's response",
     userLevel: UserRoles.MOD,
     args: [

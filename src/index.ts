@@ -36,6 +36,8 @@ import { createRaffleParticipant, deleteRaffle, getAllRaffles, getRaffleParticip
 import RaffleCommand from "./commands/RaffleCommand";
 import { DBRaffle } from "./db/schema";
 import MoveCommandCommand from "./commands/MoveCommand";
+import { EventSubWsListener } from "@twurple/eventsub-ws";
+import NukeCommand from "./commands/NukeCommand";
 
 export interface SessionData {
     userId: string;
@@ -72,6 +74,8 @@ let thirtyWarnings: Map<string, boolean> = new Map();
 let fifteenWarnings: Map<string, boolean> = new Map();
 let sevenWarnings: Map<string, boolean> = new Map();
 
+let gifterCounts: Map<string | undefined, number> = new Map();
+
 
 // export const authProvider = new StaticAuthProvider(process.env.CLIENT_ID, process.env.TOKEN);
 export const authProvider = new RefreshingAuthProvider({ clientId: process.env.CLIENT_ID, clientSecret: process.env.CLIENT_SECRET });
@@ -80,8 +84,10 @@ export const apiClient = new ApiClient({ authProvider });
 // Broadcaster Auth
 export let broadcasterAuthProvider: StaticAuthProvider | null = null;
 export let broadcasterApiClient: ApiClient | null = null;
+export let broadcasterEventSub: EventSubWsListener | null = null;
 
 export const client: ChatClient = new ChatClient({ authProvider, channels: [CHANNEL], })
+export const clientEventSub: EventSubWsListener = new EventSubWsListener({apiClient});
 let clientReady = false;
 // export const googleApi: GoogleAPI = new GoogleAPI(process.env.YOUTUBE_KEY);
 export const websocket: Socket = new Socket(parseInt(process.env.SOCKET_PORT));
@@ -114,6 +120,8 @@ setInterval(async () => {
                     console.log(`Loading session for @${session.user.display_name}`);
                     broadcasterAuthProvider = new StaticAuthProvider(process.env.CLIENT_ID, session.access_token);
                     broadcasterApiClient = new ApiClient({ authProvider: broadcasterAuthProvider });
+                    broadcasterEventSub = new EventSubWsListener({apiClient: broadcasterApiClient});
+                    broadcasterEventSub.start();
                 } else {
                     console.log(`Broadcaster Auth ID does not match environment variable ${session.user.id} / ${process.env.CHANNEL_ID}`)
                 }
@@ -153,6 +161,7 @@ setInterval(async () => {
                             if (!botDbUser) {
                                 await userModel.create({ twitchId: ud.id, discordId: null, points: 0, role: UserRoles.BOT })
                             }
+                            clientEventSub.start();
                         }
                     }
                 }
@@ -269,6 +278,30 @@ app.use("/api", apiRouter)
 app.use("/auth", AuthRoute)
 
 async function initBot(c: ChatClient) {
+    // EventSub
+    clientEventSub.onChannelFollow(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async (ev) => {
+        await reply(c, ev.userDisplayName, `DinoDance Thank you for the follow @${ev.userDisplayName}!`);
+    })
+
+    broadcasterEventSub.onChannelVipAdd(process.env.CHANNEL_ID, async ev => {
+        await reply(c, ev.userDisplayName, `DinoDance @${ev.userDisplayName} was given VIP! New shiny diamond!`);
+    })
+
+    broadcasterEventSub.onChannelHypeTrainBeginV2(process.env.CHANNEL_ID, async ev => {
+        await reply(c, ev.broadcasterName, `TwitchConHYPE HYPE TRAIN! A level ${ev.level} Hype Train has started! PogChamp`)
+    })
+
+    clientEventSub.onChannelShoutoutReceive(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async ev => {
+        await reply(c, ev.shoutingOutBroadcasterDisplayName, `@${ev.shoutingOutBroadcasterDisplayName} just shouted out the channel! Give them a follow! -> twitch.tv/${ev.shoutingOutBroadcasterDisplayName}`)
+    })
+
+    broadcasterEventSub.onStreamOnline(process.env.CHANNEL_ID, async ev => {
+        let stream = await ev.getStream();
+        await reply(c, ev.broadcasterDisplayName, `@${ev.broadcasterDisplayName} is now live! "${stream.title}" -> Playing "${stream.gameName}"!`)
+    })
+
+    // Chat Client
+
     c.onConnect(async () => {
         console.log("Initializing Local Websocket Server")
         if (client.isConnected && !websocket.initialized) await websocket.initServerAndSocket();
@@ -316,7 +349,59 @@ async function initBot(c: ChatClient) {
         reply(c, null, `DinoDance @${raider} thank you for the RAID! ${raider} just brought in ${raid.viewerCount.toLocaleString()} viewer${raid.viewerCount === 1 ? "" : "s"}${game ? ` from their ${game} stream!` : "!"} PewPewPew`)
     })
 
+    c.onResub(async (channel, user, sub, msg) => {
+        if((sub.streak || 0) > 1) await reply(c, user, `@${user} just resubscribed ${sub.isPrime ? "for free with Twitch Prime! PrimeMe" : `at Tier ${(Number(sub.plan) || 1000) / 1000}! DinoDance`} They've been subscribed for ${sub.streak || 1} month${(sub.streak || 1) === 1 ? "" : "s"}`)
+    })
+
+    c.onSubGift(async (channel, user, sub, msg) => {
+        const gifterName = sub.gifter;
+        const giftCount = gifterCounts.get(gifterName) ?? 0;
+        if(giftCount > 0) {
+            gifterCounts.set(gifterName, giftCount - 1);
+        } else {
+            await reply(c, user, `${gifterName || "Anonymous"} gifted a Tier ${(Number(sub.plan) || 1000) / 1000} sub to @${sub.displayName}! DinoDance`)
+        }
+    })
+
+    c.onCommunitySub(async (channel, user, sub, msg) => {
+        const giftCount = gifterCounts.get(user) ?? 0;
+        gifterCounts.set(user, giftCount - 1);
+        await reply(c, user, `${user || "Anonymous"} gifted ${sub.count} Tier ${(Number(sub.plan) || 1000) / 1000} sub${sub.count === 1 ? "" : "s"} to the community! DinoDance`)
+
+    })
+
+    c.onSub(async (channel, user, sub, msg) => {
+        await reply(c, user, `@${user} just subscribed ${sub.isPrime ? "for free with Twitch Prime! PrimeMe" : `at Tier ${(Number(sub.plan) || 1000) / 1000}! DinoDance`}`)
+    })
+
+    c.onSlow(async (channel, slowEnabled, slowDelay) => {
+        if(slowEnabled) {
+            c.say(channel, `⏱️ ${slowDelay ? `A ${slowDelay}s slowmode has been enabled.` : `Slowmode has been enabled.`}`)
+        } else {
+            c.say(channel, "⏱️ Slowmode has been disabled!")
+        }
+    })
+
+    c.onFollowersOnly(async (channel, enabled, timeRequired) => {
+        c.say(channel, `💜 Follower-Only mode has been ${enabled ? `enabled` : `disabled`}!${timeRequired ? ` Chatters must follow for at least ${timeRequired} minute${timeRequired === 1 ? "" : "s"}.` : ``}`)
+    })
+
+    c.onEmoteOnly(async (channel, enabled) => {
+        c.say(channel, `DinoDance LUL SeemsGood Emote-Only mode has been ${enabled ? `enabled` : `disabled`}`)
+    })
+
+    c.onSubsOnly(async (channel, enabled) => {
+        c.say(channel, `Subscriber-Only mode has been ${enabled ? `enabled` : `disabled`}.${enabled ? "Only Subscribers and Moderators may chat" : ""}`)
+    })
+
+    c.onStandardPayForward(async (channel, user, forward, msg) => {
+        await reply(c, user, `@${user} just paid forward their sub from ${forward.originalGifterDisplayName || "Anonymous"}!`)
+    })
+
     c.onMessage(async (channel, user, content, msg: ChatMessage) => {
+        if(msg.isFirst) {
+            await reply(c, user, `Welcome to the chat, @${user}!`, msg)
+        }
         let pointsBackupPath = join(cwd(), "data", "streamElementsExport.json");
         console.log(pointsBackupPath)
 
@@ -386,11 +471,16 @@ async function initBot(c: ChatClient) {
             if (customCmd) {
                 let userLevel = customCmd.userLevel || UserRolesStringMap[`${UserRoles.DEFAULT}`];
 
-                function checkPermission(role: "vip" | "mod" | "bot" | "broadcaster", checkBroadcaster: boolean = true): boolean {
+                function checkPermission(role: "vip" | "moderator" | "bot" | "broadcaster", checkBroadcaster: boolean = true): boolean {
+                    console.log("CHECKING ROLE", role)
+                    console.log("IS VIP (or mod)", (msg.userInfo.isVip || msg.userInfo.isMod))
+                    console.log("IS BROADCASTER", (msg.userInfo.isBroadcaster))
+                    console.log("IS MOD", (msg.userInfo.isMod))
+                    console.log("IS BOT", msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase())
                     if(checkBroadcaster && msg.userInfo.isBroadcaster) return true;
                     if(role === "vip" && (msg.userInfo.isVip || msg.userInfo.isMod)) return true;
                     if(role === "broadcaster" && msg.userInfo.isBroadcaster) return true;
-                    if(role === "mod" && msg.userInfo.isMod) return true;
+                    if(role === "moderator" && msg.userInfo.isMod) return true;
                     if(role === "bot" && msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase()) return true;
 
                     return false;
@@ -984,11 +1074,12 @@ async function initBot(c: ChatClient) {
             if (["points", "pts"].includes(cmdNoPrefix)) await runCommand(PointsCommand, client, user, content.split(cmd)[1], msg)
             if (["addcmd", "ac", "addcommand",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(AddCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["delcommand", "deletecommand", "removecommand", "delcmd"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(DeleteCommandCommand, client, user, content.split(cmd)[1], msg)
-            if (["editcmd", "editcommand", "changecommand",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(EditCommandCommand, client, user, content.split(cmd)[1], msg)
+            if (["editcmd", "editcommand", "changecommand", "ec"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(EditCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["setcode", "setroomcode", "src",].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(SetRoomCodeCommand, client, user, content.split(cmd)[1], msg)
             if (["movecmd", "mvcommand", "swapcmd", "swapcommand", "movecommand"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(MoveCommandCommand, client, user, content.split(cmd)[1], msg)
             if (["code", "roomcode", "rc", "join", "lobby", "room"].includes(cmdNoPrefix)) await runCommand(RoomCodeCommand, client, user, content.split(cmd)[1], msg)
             if (["raffle"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(RaffleCommand, client, user, content.split(cmd)[1], msg)
+            if (["nuke", "kms", "seppuku"].includes(cmdNoPrefix)) await runCommand(NukeCommand, client, user, content.split(cmd)[1], msg)
             // if (["join"].includes(cmdNoPrefix)) await runCommand(JoinCommand, client, user, content.split(cmd)[1], msg)
 
         }
