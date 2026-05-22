@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
 import { ChatClient, ChatMessage } from "@twurple/chat"
-import { get, post } from "axios";
+import { AxiosError, get, post } from "axios";
 import { ChatCommand, SearchedTrack, TwitchUser, UserRolesStringMap } from "./classes/Types";
 // import SongRequestCommand from "./commands/SongRequestCommand";
 // import QueueCommand from "./commands/QueueCommand";
@@ -87,7 +87,7 @@ export let broadcasterApiClient: ApiClient | null = null;
 export let broadcasterEventSub: EventSubWsListener | null = null;
 
 export const client: ChatClient = new ChatClient({ authProvider, channels: [CHANNEL], })
-export const clientEventSub: EventSubWsListener = new EventSubWsListener({apiClient});
+export const clientEventSub: EventSubWsListener = new EventSubWsListener({ apiClient });
 let clientReady = false;
 // export const googleApi: GoogleAPI = new GoogleAPI(process.env.YOUTUBE_KEY);
 export const websocket: Socket = new Socket(parseInt(process.env.SOCKET_PORT));
@@ -120,7 +120,7 @@ setInterval(async () => {
                     console.log(`Loading session for @${session.user.display_name}`);
                     broadcasterAuthProvider = new StaticAuthProvider(process.env.CLIENT_ID, session.access_token);
                     broadcasterApiClient = new ApiClient({ authProvider: broadcasterAuthProvider });
-                    broadcasterEventSub = new EventSubWsListener({apiClient: broadcasterApiClient});
+                    broadcasterEventSub = new EventSubWsListener({ apiClient: broadcasterApiClient });
                     broadcasterEventSub.start();
                 } else {
                     console.log(`Broadcaster Auth ID does not match environment variable ${session.user.id} / ${process.env.CHANNEL_ID}`)
@@ -350,13 +350,13 @@ async function initBot(c: ChatClient) {
     })
 
     c.onResub(async (channel, user, sub, msg) => {
-        if((sub.streak || 0) > 1) await reply(c, user, `@${user} just resubscribed ${sub.isPrime ? "for free with Twitch Prime! PrimeMe" : `at Tier ${(Number(sub.plan) || 1000) / 1000}! DinoDance`} They've been subscribed for ${sub.streak || 1} month${(sub.streak || 1) === 1 ? "" : "s"}`)
+        if ((sub.streak || 0) > 1) await reply(c, user, `@${user} just resubscribed ${sub.isPrime ? "for free with Twitch Prime! PrimeMe" : `at Tier ${(Number(sub.plan) || 1000) / 1000}! DinoDance`} They've been subscribed for ${sub.streak || 1} month${(sub.streak || 1) === 1 ? "" : "s"}`)
     })
 
     c.onSubGift(async (channel, user, sub, msg) => {
         const gifterName = sub.gifter;
         const giftCount = gifterCounts.get(gifterName) ?? 0;
-        if(giftCount > 0) {
+        if (giftCount > 0) {
             gifterCounts.set(gifterName, giftCount - 1);
         } else {
             await reply(c, user, `${gifterName || "Anonymous"} gifted a Tier ${(Number(sub.plan) || 1000) / 1000} sub to @${sub.displayName}! DinoDance`)
@@ -375,7 +375,7 @@ async function initBot(c: ChatClient) {
     })
 
     c.onSlow(async (channel, slowEnabled, slowDelay) => {
-        if(slowEnabled) {
+        if (slowEnabled) {
             c.say(channel, `⏱️ ${slowDelay ? `A ${slowDelay}s slowmode has been enabled.` : `Slowmode has been enabled.`}`)
         } else {
             c.say(channel, "⏱️ Slowmode has been disabled!")
@@ -399,7 +399,7 @@ async function initBot(c: ChatClient) {
     })
 
     c.onMessage(async (channel, user, content, msg: ChatMessage) => {
-        if(msg.isFirst) {
+        if (msg.isFirst) {
             await reply(c, user, `Welcome to the chat, @${user}!`, msg)
         }
         let pointsBackupPath = join(cwd(), "data", "streamElementsExport.json");
@@ -477,18 +477,18 @@ async function initBot(c: ChatClient) {
                     console.log("IS BROADCASTER", (msg.userInfo.isBroadcaster))
                     console.log("IS MOD", (msg.userInfo.isMod))
                     console.log("IS BOT", msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase())
-                    if(checkBroadcaster && msg.userInfo.isBroadcaster) return true;
-                    if(role === "vip" && (msg.userInfo.isVip || msg.userInfo.isMod)) return true;
-                    if(role === "broadcaster" && msg.userInfo.isBroadcaster) return true;
-                    if(role === "moderator" && msg.userInfo.isMod) return true;
-                    if(role === "bot" && msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase()) return true;
+                    if (checkBroadcaster && msg.userInfo.isBroadcaster) return true;
+                    if (role === "vip" && (msg.userInfo.isVip || msg.userInfo.isMod)) return true;
+                    if (role === "broadcaster" && msg.userInfo.isBroadcaster) return true;
+                    if (role === "moderator" && msg.userInfo.isMod) return true;
+                    if (role === "bot" && msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase()) return true;
 
                     return false;
                 }
 
-                if(userLevel !== "Viewer") {
-                    if(!checkPermission(userLevel.toLowerCase() as any, true)) return await reply(c, user, `You must be ${userLevel} or higher to do that!`, msg)
-                } 
+                if (userLevel !== "Viewer") {
+                    if (!checkPermission(userLevel.toLowerCase() as any, true)) return await reply(c, user, `You must be ${userLevel} or higher to do that!`, msg)
+                }
 
                 let content = customCmd.content;
 
@@ -729,8 +729,8 @@ async function initBot(c: ChatClient) {
                 regex.lastIndex = 0;
 
                 while ((match = regex.exec(content)) !== null) {
-                    const fullMatch = match[0];   
-                    const tagName = match[1]; 
+                    const fullMatch = match[0];
+                    const tagName = match[1];
                     const tagContent = match[2] || "";
 
                     results.push({ fullMatch, tagName, tagContent });
@@ -792,7 +792,7 @@ async function initBot(c: ChatClient) {
                         }
 
                         case "sender": {
-                            replaceWith = `@${msg.userInfo.displayName}`;
+                            replaceWith = `${msg.userInfo.displayName}`;
                             break;
                         }
 
@@ -926,7 +926,7 @@ async function initBot(c: ChatClient) {
                             })
 
                             try {
-                                if(query.includes("{") || query.includes("}")) {
+                                if (query.includes("{") || query.includes("}")) {
                                     replaceWith = "Title may not contain curly braces"
                                 } else {
                                     let titleSet = await setTitle(query.trim());
@@ -959,11 +959,11 @@ async function initBot(c: ChatClient) {
                             })
 
                             try {
-                                if(query.includes("{") || query.includes("}")) {
+                                if (query.includes("{") || query.includes("}")) {
                                     replaceWith = "Tags may not contain curly braces"
                                 } else {
                                     let tagSplit = query.split(",").map(q => q.trim().replaceAll(" ", ""));
-                                    if(tagSplit.length > 0) {
+                                    if (tagSplit.length > 0) {
                                         console.log("TAGS", tagSplit)
                                         let tagSet = await setTags(tagSplit);
                                         replaceWith = tagSet.length > 0 ? tagSet.join(", ") : "Error Setting Tags"
@@ -1001,7 +1001,7 @@ async function initBot(c: ChatClient) {
                             })
 
                             // let timeFormatter = Intl.DateTimeFormat("en-US", {
-                                
+
                             // })
 
                             try {
@@ -1040,7 +1040,7 @@ async function initBot(c: ChatClient) {
                             })
 
                             // let timeFormatter = Intl.DateTimeFormat("en-US", {
-                                
+
                             // })
 
                             try {
@@ -1049,6 +1049,52 @@ async function initBot(c: ChatClient) {
                                 replaceWith = followedDate ? `${timeAgo(followedDate)}` : `never`;
                             } catch (e) {
                                 replaceWith = `never`;
+                            }
+
+                            break;
+                        }
+
+                        case "urlfetch": {
+                            let split = tagContent.split(" ");
+                            let url = split?.[0];
+                            let path = split?.[1];
+                            let decode = (split?.[path ? 2 : 1] && split[path ? 2 : 1].toLowerCase() === "decode");
+                            if (!url || url.trim() === "") {
+                                replaceWith = "Invalid URL";
+                            } else {
+                                try {
+                                    let { data, status } = await get(url);
+                                    if (!data) {
+                                        replaceWith = `Server responded with status ${status}`;
+                                    } else {
+                                        let finalVal = data;
+                                        console.log("DATA", data);
+                                        const keys = path ? path.split(".") : [];
+                                        console.log("KEYS", keys)
+                                        if (keys.length > 0) {
+                                            for (const key of keys) {
+                                                let checkKey: string | number = `${key}`;
+                                                if (key.trim() !== "" && !Number.isNaN(Number(key))) checkKey = Number(key);
+                                                console.log("CHECK KEY", checkKey);
+
+                                                if (finalVal && finalVal[checkKey] !== undefined) {
+                                                    finalVal = finalVal[checkKey];
+                                                } else {
+                                                    finalVal = null;
+                                                    break;
+                                                }
+                                            }
+                                        } else if ((typeof data) === "string") {
+                                            finalVal = data;
+                                        } else finalVal = null;
+                                        console.log("FINAL", finalVal);
+
+                                        replaceWith = finalVal ? `${decode ? decodeURIComponent(finalVal) : finalVal}` : "Invalid Path"
+                                    }
+                                } catch (e) {
+                                    console.log(e);
+                                    replaceWith = `Fetch Failed`
+                                }
                             }
 
                             break;
