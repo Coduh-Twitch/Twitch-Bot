@@ -7,6 +7,7 @@ const TiktokCommand: ChatCommand = {
     enabled: true,
     name: "tiktok",
     help: "Get a link to Coduh's TikTok",
+    aliases: ["clockapp", "tt"],
     userLevel: UserRoles.DEFAULT,
     run: async (client, user, content, message) => {
         

@@ -76,6 +76,8 @@ let sevenWarnings: Map<string, boolean> = new Map();
 
 let gifterCounts: Map<string | undefined, number> = new Map();
 
+let lastScheduledMessage = "";
+
 
 // export const authProvider = new StaticAuthProvider(process.env.CLIENT_ID, process.env.TOKEN);
 export const authProvider = new RefreshingAuthProvider({ clientId: process.env.CLIENT_ID, clientSecret: process.env.CLIENT_SECRET });
@@ -333,8 +335,12 @@ async function initBot(c: ChatClient) {
 
                 let sm = scheduledMessages[rand];
 
-                let content = await sm.getContent()
-                if (content) await apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
+                if(lastScheduledMessage !== sm.id) {
+                    lastScheduledMessage = sm.id;
+                    let content = await sm.getContent()
+                    if (content) await apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
+                }
+
             }, scheduledMessageTimeout)
             intervals.push(int);
         }

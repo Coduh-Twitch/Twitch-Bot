@@ -8,6 +8,7 @@ const DiscordCommand: ChatCommand = {
     enabled: true,
     name: "discord",
     help: "Get access to so many hot milfs. Single ones, too.",
+    aliases: ["disc", "dc", "discordserver"],
     userLevel: UserRoles.DEFAULT,
     run: async (client, user, content, message) => {
         const cta = await getDiscordCta();
