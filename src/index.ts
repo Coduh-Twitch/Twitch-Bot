@@ -262,7 +262,8 @@ export function reply(c: ChatClient, user: string | null, content, msg?: ChatMes
 export async function sendAndPin(c: ChatClient, user, content) {
     apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content).then(async m => {
         console.log("sent message via helix ", m.id)
-        await pinMessage(m.id);
+        
+        await pinMessage(m);
     }).catch(e => {
         console.log("Failed to send chat message via Helix", e)
     })

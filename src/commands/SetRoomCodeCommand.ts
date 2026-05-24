@@ -24,10 +24,14 @@ const SetRoomCodeCommand: ChatCommand = {
 
         newCode = newCode.toUpperCase();
 
+        let stream = await apiClient.streams.getStreamByUserId(process.env.CHANNEL_ID);
+        if(!stream) return reply(client, user, `The room code can only be set when the stream is live.`)
+
         try {
             let set: boolean = await setRoomCode(newCode);
             if(set) {
                 await client.say(process.env.CHANNEL, `Code has been set: ${newCode}`)
+                await sendAndPin(client, user, `${stream.gameName.includes("Mario Kart") ? `Room Code -> ` : stream.gameName.includes("Jackbox") ? `Join the Audience -> ` : ``}${newCode}`)
                 
             } else {
                 reply(client, user, `Failed to set Room Code`, message)

@@ -1,12 +1,13 @@
-import { get, post } from "axios";
+import { get, post, put } from "axios";
 import { apiClient, authProvider, broadcasterApiClient, client, SOCIAL_LINKS } from ".";
 import { userModel } from "./models/user";
 import { sessionModel } from "./models/session";
 import { Message } from "ircv3";
-import { HelixChannelFollower, HelixStream, HelixUser } from "@twurple/api";
+import { HelixChannelFollower, HelixSentChatMessage, HelixStream, HelixUser } from "@twurple/api";
 import { ensureDirSync, ensureFileSync, writeJSONSync } from "fs-extra";
 import { join } from "path";
 import { DataObject, getRawData } from "@twurple/common";
+import { ChatMessage } from "@twurple/chat";
 
 export const getDiscordCta = async (): Promise<string> => {
     const guildInvite = "cTVvyh3zke"
@@ -39,18 +40,18 @@ export const getRoomCode = async (): Promise<string> => {
     return dbUser.game_code;
 }
 
-export const pinMessage = async (messageId: string): Promise<boolean> => {
+export const pinMessage = async (message: ChatMessage | HelixSentChatMessage, durationSeconds: number | null = null): Promise<boolean> => {
     let session = await sessionModel.findOne({userId: process.env.BOT_USER_ID});
     if(!session) return false;
 
     let headers = {
-        "Authorization": `Oauth ${session.accessToken}`,
-        "Client-Id": "kimne78kx3ncx6brgo4mv6wki5h1ko"
+        "Authorization": `Bearer ${session.accessToken}`,
+        "Client-Id": process.env.CLIENT_ID
     }
 
     try {
-        let res = await post(`https://gql.twitch.tv/gql`, {"operationName":"PinChatMessage","variables":{"input":{"channelID":process.env.CHANNEL_ID,"messageID":messageId,"durationSeconds":1200,"type":"MOD"}}}, {headers});
-        console.log(`pinning message ${messageId}`)
+        let res = await put(`https://api.twitch.tv/helix/chat/pins?broadcaster_id=${process.env.CHANNEL_ID}&moderator_id=${process.env.BOT_USER_ID}&message_id=${message.id}${durationSeconds ? `&duration_seconds=${durationSeconds}` : ""}`, null, {headers});
+        console.log(`pinning message ${message.id}`)
         console.log(res)
         
     } catch(e) {
