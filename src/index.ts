@@ -108,7 +108,7 @@ setInterval(async () => {
         console.log(``)
         return;
     }
-    if (!broadcasterAuthProvider) {
+    if (!broadcasterAuthProvider || !broadcasterApiClient || !broadcasterEventSub) {
         console.log("Initializing Broadcaster auth provider")
         let sessionRes = await get(`${process.env.WEB_URL}/api/session?key=${process.env.CLIENT_SECRET}`);
         console.log("SESSION", sessionRes.data)
@@ -262,7 +262,7 @@ export function reply(c: ChatClient, user: string | null, content, msg?: ChatMes
 export async function sendAndPin(c: ChatClient, user, content) {
     apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content).then(async m => {
         console.log("sent message via helix ", m.id)
-        
+
         await pinMessage(m);
     }).catch(e => {
         console.log("Failed to send chat message via Helix", e)
@@ -281,27 +281,30 @@ app.use("/api", apiRouter)
 app.use("/auth", AuthRoute)
 
 async function initBot(c: ChatClient) {
-    // EventSub
-    clientEventSub.onChannelFollow(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async (ev) => {
-        await reply(c, ev.userDisplayName, `DinoDance Thank you for the follow @${ev.userDisplayName}!`);
-    })
+    if (clientEventSub && broadcasterEventSub) {
+        // EventSub
+        clientEventSub.onChannelFollow(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async (ev) => {
+            await reply(c, ev.userDisplayName, `DinoDance Thank you for the follow @${ev.userDisplayName}!`);
+        })
 
-    broadcasterEventSub.onChannelVipAdd(process.env.CHANNEL_ID, async ev => {
-        await reply(c, ev.userDisplayName, `DinoDance @${ev.userDisplayName} was given VIP! New shiny diamond!`);
-    })
+        clientEventSub.onChannelShoutoutReceive(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async ev => {
+            await reply(c, ev.shoutingOutBroadcasterDisplayName, `@${ev.shoutingOutBroadcasterDisplayName} just shouted out the channel! Give them a follow! -> twitch.tv/${ev.shoutingOutBroadcasterDisplayName}`)
+        })
 
-    broadcasterEventSub.onChannelHypeTrainBeginV2(process.env.CHANNEL_ID, async ev => {
-        await reply(c, ev.broadcasterName, `TwitchConHYPE HYPE TRAIN! A level ${ev.level} Hype Train has started! PogChamp`)
-    })
+        broadcasterEventSub.onChannelVipAdd(process.env.CHANNEL_ID, async ev => {
+            await reply(c, ev.userDisplayName, `DinoDance @${ev.userDisplayName} was given VIP! New shiny diamond!`);
+        })
 
-    clientEventSub.onChannelShoutoutReceive(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async ev => {
-        await reply(c, ev.shoutingOutBroadcasterDisplayName, `@${ev.shoutingOutBroadcasterDisplayName} just shouted out the channel! Give them a follow! -> twitch.tv/${ev.shoutingOutBroadcasterDisplayName}`)
-    })
+        broadcasterEventSub.onChannelHypeTrainBeginV2(process.env.CHANNEL_ID, async ev => {
+            await reply(c, ev.broadcasterName, `TwitchConHYPE HYPE TRAIN! A level ${ev.level} Hype Train has started! PogChamp`)
+        })
 
-    broadcasterEventSub.onStreamOnline(process.env.CHANNEL_ID, async ev => {
-        let stream = await ev.getStream();
-        await reply(c, ev.broadcasterDisplayName, `@${ev.broadcasterDisplayName} is now live! "${stream.title}" -> Playing "${stream.gameName}"!`)
-    })
+
+        broadcasterEventSub.onStreamOnline(process.env.CHANNEL_ID, async ev => {
+            let stream = await ev.getStream();
+            await reply(c, ev.broadcasterDisplayName, `@${ev.broadcasterDisplayName} is now live! "${stream.title}" -> Playing "${stream.gameName}"!`)
+        })
+    }
 
     // Chat Client
 
@@ -336,7 +339,7 @@ async function initBot(c: ChatClient) {
 
                 let sm = scheduledMessages[rand];
 
-                if(lastScheduledMessage !== sm.id) {
+                if (lastScheduledMessage !== sm.id) {
                     lastScheduledMessage = sm.id;
                     let content = await sm.getContent()
                     if (content) await apiClient.chat.sendChatMessageAsApp(process.env.BOT_USER_ID, process.env.CHANNEL_ID, content)
@@ -1102,6 +1105,43 @@ async function initBot(c: ChatClient) {
                                     console.log(e);
                                     replaceWith = `Fetch Failed`
                                 }
+                            }
+
+                            break;
+                        }
+
+                        case "pin": {
+                            console.log("PIN", [tagName, tagContent])
+                            let replaceArgs = tagContent.match(/{[0-9]}|{query}/);
+                            let query = tagContent;
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "query") {
+                                        query = query.replaceAll("{query}", args.join(" "));
+                                    }
+                                }
+                            })
+
+                            try {
+                                if (query.includes("{") || query.includes("}")) {
+                                    replaceWith = "May not contain curly braces"
+                                } else {
+                                        try {
+                                            await sendAndPin(client, user, query);
+                                            replaceWith = query;
+                                        } catch(e) {
+                                            replaceWith = "Error Updating Pinned Message"
+                                        }
+                                }
+                            } catch (e) {
+                                replaceWith = `Error Updating Pinned Message`
                             }
 
                             break;
