@@ -26,6 +26,7 @@ export default class Socket {
 
 
     constructor(port: number) {
+        
         this.port = port;
         this.sockets = new Map<string, WebSocket>();
         this.initialized = false;
