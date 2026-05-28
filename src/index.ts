@@ -844,6 +844,7 @@ async function initBot(c: ChatClient) {
 
                             try {
                                 query = query.replaceAll("@", "");
+                                if(query.trim() === "") query = channel;
                                 let game = await getGame(query);
                                 replaceWith = game || "Error Fetching Stream";
                             } catch (e) {
@@ -868,7 +869,7 @@ async function initBot(c: ChatClient) {
                                     console.log("query", query);
                                 } else {
                                     if (rawArgIndex.toLowerCase() === "sender") {
-                                        query = query.replaceAll("{sender}", `@${msg.userInfo.userName}`);
+                                        query = query.replaceAll("{sender}", `${msg.userInfo.userName}`);
                                     }
                                     if (rawArgIndex.toLowerCase() === "touser") {
                                         let mention = args?.[0] || msg.userInfo.userName;
