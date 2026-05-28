@@ -8,6 +8,7 @@
         "incremental": true,
         "skipLibCheck": true,
         "esModuleInterop": true,
+        "rootDir": "./src",
         "outDir": "./dist/src",
         "resolveJsonModule": true,
         "moduleResolution": "NodeNext",
