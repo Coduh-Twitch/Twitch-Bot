@@ -313,6 +313,7 @@ async function initBot(c: ChatClient) {
         if (client.isConnected && !websocket.initialized) await websocket.initServerAndSocket();
 
         console.log("Loading Commands Map...")
+        console.log("Checking Commands Dir", join(process.cwd(), "src", "commands"))
         readdirSync(join(process.cwd(), "src", "commands")).forEach(file => {
             let command: ChatCommand = (require(join(process.cwd(), "src", "commands", file))).default;
             if (command && command.help && command.enabled) {
