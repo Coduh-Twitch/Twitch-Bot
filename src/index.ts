@@ -309,13 +309,15 @@ async function initBot(c: ChatClient) {
     // Chat Client
 
     c.onConnect(async () => {
+        let dev = process.argv.includes("-dev");
         console.log("Initializing Local Websocket Server")
         if (client.isConnected && !websocket.initialized) await websocket.initServerAndSocket();
 
         console.log("Loading Commands Map...")
-        console.log("Checking Commands Dir", join(process.cwd(), "src", "commands"))
-        readdirSync(join(process.cwd(), "src", "commands")).forEach(file => {
-            let command: ChatCommand = (require(join(process.cwd(), "src", "commands", file))).default;
+        let dirPath = join(process.cwd(), `${dev ? "src" : "dist/src"}`, "commands")
+        console.log("Checking Commands Dir", dirPath)
+        readdirSync(dirPath).filter(file => file.endsWith(dev ? ".ts" : ".js")).forEach(file => {
+            let command: ChatCommand = (require(join(dirPath, file))).default;
             if (command && command.help && command.enabled) {
                 let cmdCopy = command;
                 cmdCopy.userLevel = UserRolesStringMap[`${cmdCopy.userLevel}`] as any;
