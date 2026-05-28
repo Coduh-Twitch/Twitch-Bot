@@ -1,4 +1,4 @@
-import { apiClient, broadcasterApiClient, reply } from "..";
+import { apiClient, broadcasterApiClient, reply } from "../index";
 import { ChatCommand } from "../classes/Types";
 import { UserRoles } from "../models/user";
 

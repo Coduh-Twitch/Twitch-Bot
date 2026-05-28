@@ -1,4 +1,4 @@
-import { reply } from "..";
+import { reply } from "../index";
 import { ChatCommand } from "../classes/Types";
 import { createRaffle, deleteRaffle, getAllRaffles, getRaffleParticipants } from "../db/raffle";
 import { UserRoles } from "../models/user";

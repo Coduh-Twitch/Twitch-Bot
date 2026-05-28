@@ -1,4 +1,4 @@
-import { prefix, reply } from "..";
+import { prefix, reply } from "../index";
 import { ChatCommand } from "../classes/Types";
 import { customCommandModel } from "../models/command";
 import {randomUUID} from "node:crypto"

@@ -1,5 +1,5 @@
 import { get, post } from "axios";
-import { reply, SOCIAL_LINKS } from "..";
+import { reply, SOCIAL_LINKS } from "../index";
 import { ChatCommand } from "../classes/Types"
 import { UserRoles } from "../models/user";
 

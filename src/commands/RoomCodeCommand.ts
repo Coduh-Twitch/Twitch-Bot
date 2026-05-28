@@ -1,4 +1,4 @@
-import { apiClient, reply } from "..";
+import { apiClient, reply } from "../index";
 import { ChatCommand } from "../classes/Types";
 import { UserRoles } from "../models/user";
 import { getRoomCode, pinMessage } from "../util";
