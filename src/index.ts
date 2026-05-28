@@ -333,8 +333,8 @@ async function initBot(c: ChatClient) {
         console.log(`Client Connected!`)
         // await client.join(CHANNEL)
         // scheduledMessages.forEach(async sm => {
-        // let stream = await apiClient.streams.getStreamByUserName(process.env.CHANNEL);
-        let stream = true;
+        let stream = await apiClient.streams.getStreamByUserName(process.env.CHANNEL);
+        // let stream = true;
         if (scheduledMessages.length > 0 && stream) {
             let int = await setInterval(async () => {
                 let filtered = await Promise.all(scheduledMessages.filter(async m => (await m.getContent()) !== null));
