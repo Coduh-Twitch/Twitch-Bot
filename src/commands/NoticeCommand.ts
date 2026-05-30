@@ -9,7 +9,7 @@ import { getNotice, setNoticeLabel, setNoticeVisibility } from "../db/notice";
 durationFormat(moment);
 
 const NoticeCommand: ChatCommand = {
-    enabled: false,
+    enabled: true,
     name: "notice",
     help: "Set the mod notice on screen",
 
