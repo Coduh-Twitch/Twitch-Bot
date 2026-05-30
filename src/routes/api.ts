@@ -3,6 +3,8 @@ import { CHANNEL, client, commandsMap, reply } from "..";
 import { get, post } from "axios";
 import { pollModel } from "../models/polls";
 import { customCommandModel } from "../models/command";
+import { getTimer } from "../db/timer";
+import { getNotice } from "../db/notice";
 
 function ordinal_suffix_of(i: number) {
     let j = i % 10,
@@ -81,6 +83,16 @@ apiRouter.get("/custom-commands", async (req, res) => {
     let commands = await customCommandModel.find();
     if(!commands || commands.length <= 0) return res.sendStatus(404);
     res.send({commands})
+});
+
+apiRouter.get("/timer", async (req, res) => {
+    let timer = getTimer();
+    res.send(timer);
+});
+
+apiRouter.get("/notice", async (req, res) => {
+    let notice = getNotice();
+    res.send(notice);
 });
 
 apiRouter.post("/discord/new-member", async (req, res) => {

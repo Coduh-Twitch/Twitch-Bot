@@ -90,3 +90,18 @@ export const raffle_participants = sqliteTable("raffle_participants", {
 	id: text("id").notNull().primaryKey(),
 	raffle_id: text("raffle_id").notNull(),
 })
+
+export const timer = sqliteTable("timer", {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()).notNull(),
+	seconds: integer("seconds").notNull().default(0),
+	started_at: integer("started_at", {mode: "timestamp_ms"}).notNull().$defaultFn(() => new Date()),
+	visible: integer("visible", {mode: "boolean"}).notNull().default(false),
+	paused: integer("paused", {mode: "boolean"}).notNull().default(false),
+	label: text("label").notNull().default("Active Timer")
+})
+
+export const notice = sqliteTable("notice", {
+	id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()).notNull(),
+	visible: integer("visible", {mode: "boolean"}).notNull().default(false),
+	label: text("label").notNull().default("Mod Notice")
+})

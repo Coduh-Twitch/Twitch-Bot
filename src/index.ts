@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
-import { ChatClient, ChatMessage } from "@twurple/chat"
-import { AxiosError, get, post } from "axios";
+import { ChatClient, ChatMessage, ChatUser } from "@twurple/chat"
+import axios, { AxiosError, get, post } from "axios";
 import { ChatCommand, SearchedTrack, TwitchUser, UserRolesStringMap } from "./classes/Types";
 // import SongRequestCommand from "./commands/SongRequestCommand";
 // import QueueCommand from "./commands/QueueCommand";
@@ -34,10 +34,14 @@ import { getFollowedDate, getGame, getUser, getWeather, pinMessage, setGame, set
 import { readdirSync } from "fs";
 import { createRaffleParticipant, deleteRaffle, getAllRaffles, getRaffleParticipants } from "./db/raffle";
 import RaffleCommand from "./commands/RaffleCommand";
-import { DBRaffle } from "./db/schema";
+import { DBRaffle, timer } from "./db/schema";
 import MoveCommandCommand from "./commands/MoveCommand";
 import { EventSubWsListener } from "@twurple/eventsub-ws";
 import NukeCommand from "./commands/NukeCommand";
+import TimerCommand from "./commands/TimerCommand";
+import { getTimer, setTimerLabel, setTimerPaused, setTimerSeconds, setTimerVisibility } from "./db/timer";
+import moment from "moment";
+import NoticeCommand from "./commands/NoticeCommand";
 
 export interface SessionData {
     userId: string;
@@ -102,6 +106,8 @@ export const commandsMap: Map<string, ChatCommand> = new Map<string, ChatCommand
 // export const CHANNEL_REWARDS = {
 //     spotify_test: "9bbed441-e8e2-47d7-9364-b519d1030206"
 // }
+
+
 
 setInterval(async () => {
     if (!client) {
@@ -269,9 +275,32 @@ export async function sendAndPin(c: ChatClient, user, content) {
     })
 }
 
+export async function unpinMessage(): Promise<void> {
+    let session = await sessionModel.findOne({userId: process.env.BOT_USER_ID});
+    if(!session) return;
+
+    let headers = {
+        "Authorization": `Bearer ${session.accessToken}`,
+        "Client-Id": process.env.CLIENT_ID
+    }
+
+    let pinnedMessage = (await get(`https://api.twitch.tv/helix/chat/pins?broadcaster_id=${process.env.CHANNEL_ID}&moderator_id=${process.env.BOT_USER_ID}`, {headers})).data?.data?.[0] || null;
+    if(!pinnedMessage || !pinnedMessage.message_id) return;
+
+    try {
+        (await axios.delete(`https://api.twitch.tv/helix/chat/pins?broadcaster_id=${process.env.CHANNEL_ID}&moderator_id=${process.env.BOT_USER_ID}&message_id=${pinnedMessage.message_id}`, {headers}))
+    } catch(e) {
+        console.log("failed to unpin message", e)
+    }
+}
+
 export async function runCommand(command: ChatCommand, c, user, content, msg) {
     if (!command.enabled) return;
     await command.run(c, user, content, msg)
+}
+
+export function userHasAuthority(user: ChatUser): boolean {
+    return [user.isMod, user.isBroadcaster].includes(true);
 }
 
 authProvider.onRefresh(async (userId, tokenData) => await sessionModel.findOneAndUpdate({ userId: userId }, tokenData));
@@ -281,6 +310,15 @@ app.use("/api", apiRouter)
 app.use("/auth", AuthRoute)
 
 async function initBot(c: ChatClient) {
+    // Timers
+    setInterval(async () => {
+        let timer = getTimer();
+        if (!timer.paused && timer.seconds > 0) {
+            let set = setTimerSeconds(timer.seconds - 1);
+        }
+    }, 1e3);
+
+
     if (clientEventSub && broadcasterEventSub) {
         // EventSub
         clientEventSub.onChannelFollow(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async (ev) => {
@@ -847,7 +885,7 @@ async function initBot(c: ChatClient) {
 
                             try {
                                 query = query.replaceAll("@", "");
-                                if(query.trim() === "") query = channel;
+                                if (query.trim() === "") query = channel;
                                 let game = await getGame(query);
                                 replaceWith = game || "Error Fetching Stream";
                             } catch (e) {
@@ -1137,15 +1175,66 @@ async function initBot(c: ChatClient) {
                                 if (query.includes("{") || query.includes("}")) {
                                     replaceWith = "May not contain curly braces"
                                 } else {
-                                        try {
-                                            await sendAndPin(client, user, query);
-                                            replaceWith = query;
-                                        } catch(e) {
-                                            replaceWith = "Error Updating Pinned Message"
-                                        }
+                                    try {
+                                        await sendAndPin(client, user, query);
+                                        replaceWith = query;
+                                    } catch (e) {
+                                        replaceWith = "Error Updating Pinned Message"
+                                    }
                                 }
                             } catch (e) {
                                 replaceWith = `Error Updating Pinned Message`
+                            }
+
+                            break;
+                        }
+
+                        case "timer": {
+                            let replaceArgs = tagContent.match(/{[0-9]}|{query}/);
+                            let querySplit = tagContent.split(" ");
+                            let query = querySplit[0];
+                            querySplit.shift();
+                            let label = querySplit.join(" ").trim();
+
+                            if (replaceArgs && replaceArgs.length > 0) replaceArgs.forEach(a => {
+
+                                let rawArgIndex = a.replace("{", "").replace("}", "");
+                                let argsIndex = Number(rawArgIndex);
+                                if (!Number.isNaN(argsIndex)) {
+                                    let arg = args[argsIndex];
+                                    query = query.replaceAll(`{${argsIndex}}`, arg);
+                                } else {
+                                    if (rawArgIndex.toLowerCase() === "query") {
+                                        query = query.replaceAll("{query}", args.join(" "));
+                                    }
+                                }
+                            })
+
+                            try {
+                                if (query.includes("{") || query.includes("}")) {
+                                    replaceWith = "Query may not contain curly braces"
+                                } else {
+                                    let duration = query;
+                                    let durationUnit = duration ? duration.substring(duration.length - 1) : null;
+                                    duration = durationUnit ? duration.replace(durationUnit, "").trim() : null;
+                                    let duration_seconds = (duration && durationUnit) ? moment.duration(duration, durationUnit as any).asSeconds() : 0;
+                                    console.log(duration)
+                                    console.log(durationUnit)
+                                    console.log(duration_seconds)
+                                    if (!duration || duration_seconds === 0) replaceWith = `Error Starting Timer`
+                                    if (duration_seconds >= 2505600) replaceWith = `Error Starting Timer`
+
+                                    let newTimer = setTimerSeconds(duration_seconds);
+                                    if(label !== "") setTimerLabel(label);
+                                    if(newTimer.paused) setTimerPaused(false);
+                                    if (!newTimer.visible) setTimerVisibility(true);
+
+                                    let formattedDuration = moment.duration(newTimer.seconds, "seconds").format(`${newTimer.seconds >= 86400 ? "DD:" : ""}${newTimer.seconds >= 3600 ? "HH:" : ""}${newTimer.seconds >= 60 ? "mm:" : "[00:]"}ss`);
+
+                                    replaceWith = `Started timer for ${formattedDuration}${label !== "" ? ` with label "${label}"` : ""}`
+                                }
+                            } catch (e) {
+                                replaceWith = `Error Starting Timer`
                             }
 
                             break;
@@ -1177,6 +1266,8 @@ async function initBot(c: ChatClient) {
             if (["code", "roomcode", "rc", "join", "lobby", "room"].includes(cmdNoPrefix)) await runCommand(RoomCodeCommand, client, user, content.split(cmd)[1], msg)
             if (["raffle"].includes(cmdNoPrefix) && (msg.userInfo.isMod || msg.userInfo.isBroadcaster)) await runCommand(RaffleCommand, client, user, content.split(cmd)[1], msg)
             if (["nuke", "kms", "seppuku"].includes(cmdNoPrefix)) await runCommand(NukeCommand, client, user, content.split(cmd)[1], msg)
+            if (["timer"].includes(cmdNoPrefix)) await runCommand(TimerCommand, client, user, content.split(cmd)[1], msg)
+            if (["notice"].includes(cmdNoPrefix)) await runCommand(NoticeCommand, client, user, content.split(cmd)[1], msg)
             // if (["join"].includes(cmdNoPrefix)) await runCommand(JoinCommand, client, user, content.split(cmd)[1], msg)
 
         }
