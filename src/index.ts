@@ -525,12 +525,12 @@ async function initBot(c: ChatClient) {
                     console.log("CHECKING ROLE", role)
                     console.log("IS VIP (or mod)", (msg.userInfo.isVip || msg.userInfo.isMod))
                     console.log("IS BROADCASTER", (msg.userInfo.isBroadcaster))
-                    console.log("IS MOD", (msg.userInfo.isMod))
+                    console.log("IS MOD", (msg.userInfo.isMod) || (msg.userInfo.isLeadMod))
                     console.log("IS BOT", msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase())
                     if (checkBroadcaster && msg.userInfo.isBroadcaster) return true;
                     if (role === "vip" && (msg.userInfo.isVip || msg.userInfo.isMod)) return true;
                     if (role === "broadcaster" && msg.userInfo.isBroadcaster) return true;
-                    if (role === "moderator" && msg.userInfo.isMod) return true;
+                    if (role === "moderator" && (msg.userInfo.isMod || msg.userInfo.isLeadMod)) return true;
                     if (role === "bot" && msg.userInfo.userName === process.env.BOT_USER_NAME.toLowerCase()) return true;
 
                     return false;
