@@ -318,7 +318,6 @@ async function initBot(c: ChatClient) {
         }
     }, 1e3);
 
-
     if (clientEventSub && broadcasterEventSub) {
         // EventSub
         clientEventSub.onChannelFollow(process.env.CHANNEL_ID, process.env.BOT_USER_ID, async (ev) => {
@@ -538,6 +537,8 @@ async function initBot(c: ChatClient) {
                 }
 
                 if (userLevel !== "Viewer") {
+                    console.log("customCmd", customCmd.trigger)
+                    console.log("user level", userLevel)
                     if (!checkPermission(userLevel.toLowerCase() as any, true)) return await reply(c, user, `You must be ${userLevel} or higher to do that!`, msg)
                 }
 
