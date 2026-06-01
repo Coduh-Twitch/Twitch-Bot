@@ -23,6 +23,13 @@ export const setTimerVisibility = (show: boolean): typeof timer.$inferInsert => 
     } else return db.update(timer).set({visible: show}).where(eq(timer.id, dbTimer.id)).returning().get();
 }
 
+export const setTimerLabelVisibility = (show: boolean): typeof timer.$inferInsert => {
+    let dbTimer = getTimer();
+    if(!dbTimer) {
+        return db.insert(timer).values({show_label: show}).returning().get();
+    } else return db.update(timer).set({show_label: show}).where(eq(timer.id, dbTimer.id)).returning().get();
+}
+
 export const setTimerPaused = (paused: boolean): typeof timer.$inferInsert => {
     let dbTimer = getTimer();
     if(!dbTimer) {

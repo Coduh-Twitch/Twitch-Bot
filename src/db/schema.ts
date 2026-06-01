@@ -97,6 +97,7 @@ export const timer = sqliteTable("timer", {
 	started_at: integer("started_at", {mode: "timestamp_ms"}).notNull().$defaultFn(() => new Date()),
 	visible: integer("visible", {mode: "boolean"}).notNull().default(false),
 	paused: integer("paused", {mode: "boolean"}).notNull().default(false),
+	show_label: integer("show_label", {mode: "boolean"}).notNull().default(false),
 	label: text("label").notNull().default("Active Timer")
 })
 

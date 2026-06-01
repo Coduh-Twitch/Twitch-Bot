@@ -1,7 +1,7 @@
 import moment from "moment";
 import { reply, userHasAuthority } from "..";
 import { ChatCommand } from "../classes/Types";
-import { getTimer, setTimerLabel, setTimerPaused, setTimerSeconds, setTimerVisibility } from "../db/timer";
+import { getTimer, setTimerLabel, setTimerLabelVisibility, setTimerPaused, setTimerSeconds, setTimerVisibility } from "../db/timer";
 import { UserRoles } from "../models/user";
 import durationFormat from "moment-duration-format"
 
@@ -54,7 +54,7 @@ const TimerCommand: ChatCommand = {
             userLevel: UserRoles.MOD,
             args: [
                 {
-                    name: "new_label | \"default\"",
+                    name: "new_label | \"default\" | \"hide\"",
                     description: "The new timer label",
                     required: true
                 }
@@ -150,6 +150,12 @@ const TimerCommand: ChatCommand = {
                 let label = args.join(" ").trim();
                 if(!label || label === "") return reply(client, user, `!${TimerCommand.name} ${subcommand} {new_label}`, message)
                 if(label.toLowerCase() === "default") label = "Active Timer";
+                if(label.toLowerCase() === "hide") {
+                    setTimerLabelVisibility(false);
+                    return reply(client, user, `Hiding the timer label`, message)
+                } else {
+                    setTimerLabelVisibility(true);
+                }
                 try {
                     setTimerLabel(label);
                     reply(client, user, `Set timer label to: "${label}"!`, message)
