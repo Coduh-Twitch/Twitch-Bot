@@ -327,33 +327,40 @@ async function initBot(c: ChatClient) {
 
     // Hand out points to all chatters
     setInterval(async () => {
-        let chatters = await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
-            return await ctx.chat.getChatters(process.env.CHANNEL_ID);
-        });
-        if(chatters.data) {
-            console.log(`Found ${chatters.total} chatter(s)`)
-            for(const chatter of chatters.data) {
-                let basePoints = 200;
-                let randomPoints = Math.floor(Math.random() * 100);
-                let points = basePoints + randomPoints;
+        let stream = await apiClient.streams.getStreamByUserId(process.env.BOT_USER_ID);
 
-                let dbChatter = await userModel.findOne({twitchId: chatter.userId});
-                if(!dbChatter) {
-                    let newChatter = new userModel({
-                        twitchId: chatter.userId,
-                        role: UserRoles.DEFAULT,
-                        points: points
-                    });
+        if(stream) {
 
-                    await newChatter.save()
-
-                    console.log(`Created DB entry for chatter ${chatter.userDisplayName}`)
-                } else {
-                    dbChatter.set("points", dbChatter.points + points);
-                    await dbChatter.save();
-                    console.log(`Update DB entry for chatter ${chatter.userDisplayName} (+${points} pts)`)
+            let chatters = await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+                return await ctx.chat.getChatters(process.env.CHANNEL_ID);
+            });
+            if(chatters.data) {
+                console.log(`Found ${chatters.total} chatter(s)`)
+                for(const chatter of chatters.data) {
+                    let basePoints = 200;
+                    let randomPoints = Math.floor(Math.random() * 100);
+                    let points = basePoints + randomPoints;
+                    
+                    let dbChatter = await userModel.findOne({twitchId: chatter.userId});
+                    if(!dbChatter) {
+                        let newChatter = new userModel({
+                            twitchId: chatter.userId,
+                            role: UserRoles.DEFAULT,
+                            points: points
+                        });
+                        
+                        await newChatter.save()
+                        
+                        console.log(`Created DB entry for chatter ${chatter.userDisplayName}`)
+                    } else {
+                        dbChatter.set("points", dbChatter.points + points);
+                        await dbChatter.save();
+                        console.log(`Update DB entry for chatter ${chatter.userDisplayName} (+${points} pts)`)
+                    }
                 }
             }
+        } else {
+            console.log(`Stream offline - Skipping point handout`)
         }
 
     },300e3);
