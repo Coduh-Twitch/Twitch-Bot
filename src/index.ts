@@ -110,6 +110,13 @@ export const commandsMap: Map<string, ChatCommand> = new Map<string, ChatCommand
 
 
 setInterval(async () => {
+    let tokenUser = await broadcasterApiClient.users.getUserById(process.env.CHANNEL_ID);
+
+    if(!tokenUser && broadcasterApiClient !== null) {
+        broadcasterApiClient = null;
+        broadcasterAuthProvider = null;
+        broadcasterEventSub = null;
+    }
     if (!client) {
         console.log(``)
         return;
