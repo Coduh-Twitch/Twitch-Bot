@@ -105,3 +105,22 @@ export const notice = sqliteTable("notice", {
 	visible: integer("visible", {mode: "boolean"}).notNull().default(false),
 	label: text("label").notNull().default("Mod Notice")
 })
+
+export const chosen_clip = sqliteTable("chosen_clip", {
+    id: text("id").primaryKey().notNull(),
+    title: text("title").notNull(),
+    game: text("game").notNull(),
+    gameId: text("gameId").notNull(),
+    createdDate: integer("featured", {mode: 'timestamp_ms'}),
+    featured: integer("featured", {mode: "boolean"}),
+    creatorName: text("creatorName").notNull(),
+    creatorId: text("creatorId").notNull(),
+    embedUrl: text("embedUrl").notNull(),
+    views: integer("views").notNull(),
+	channel: text("channel").notNull(),
+})
+
+export const clips_visible = sqliteTable("clips_visible", {
+	channel: text("channel").notNull().primaryKey(),
+	visible: integer("visible", {mode: "boolean"}).notNull().default(false)
+})

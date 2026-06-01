@@ -5,6 +5,8 @@ import { pollModel } from "../models/polls";
 import { customCommandModel } from "../models/command";
 import { getTimer } from "../db/timer";
 import { getNotice } from "../db/notice";
+import { getClips, randomClip } from "../util";
+import { getChosenClip, setChosenClip } from "../db/clip";
 
 function ordinal_suffix_of(i: number) {
     let j = i % 10,
@@ -20,6 +22,8 @@ function ordinal_suffix_of(i: number) {
     }
     return i.toLocaleString() + "th";
 }
+
+
 
 const apiRouter = Router();
 
@@ -84,6 +88,40 @@ apiRouter.get("/custom-commands", async (req, res) => {
     if(!commands || commands.length <= 0) return res.sendStatus(404);
     res.send({commands})
 });
+
+apiRouter.get("/clips", async (req, res) => {
+    let params = req.query;
+    let sort: "views" | "newest" | "oldest" = "views";
+    if(params.sort && ["views", "newest", "oldest"].includes(params.sort as string || "")) sort = params.sort as any;
+    let clips = await getClips(false, sort);
+    res.send(clips);
+})
+
+apiRouter.get("/clips/featured", async (req, res) => {
+    let clips = await getClips(true);
+    res.send(clips);
+})
+
+apiRouter.get("/clips/random", async (req, res) => {
+    let clip = await randomClip();
+    res.send(clip);
+})
+
+apiRouter.get("/clips/chosen", async (req, res) => {
+    let clip = getChosenClip();
+    res.send(clip);
+})
+
+apiRouter.post("/clips/finished", async (req, res) => {
+    let authHeader = req.headers?.["key"]
+    console.log("AUTH HEADER", authHeader)
+    if(!req.headers || !authHeader) return res.sendStatus(403);
+    if(authHeader && authHeader !== process.env.CLIENT_SECRET) return res.sendStatus(403);
+
+    let clip = await randomClip();
+    let newClip = setChosenClip(clip);
+    res.send(newClip);
+})
 
 apiRouter.get("/timer", async (req, res) => {
     let timer = getTimer();
