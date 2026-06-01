@@ -1296,7 +1296,7 @@ async function initBot(c: ChatClient) {
             }
         }
 
-        if (cmd.length > 0) {
+        if (cmd.length > 0 && content.startsWith("!")) {
             // if (["sr", "songrequest"].includes(cmdNoPrefix)) await runCommand(SongRequestCommand, client, user, content.split(cmd)[1], msg)
             // if (["q", "queue", "songs", "songlist"].includes(cmdNoPrefix)) await runCommand(QueueCommand, client, user, content.split(cmd)[1], msg)
             // if (["np", "current", "song", "playing", "nowplaying"].includes(cmdNoPrefix)) await runCommand(NowPlayingCommand, client, user, content.split(cmd)[1], msg)
