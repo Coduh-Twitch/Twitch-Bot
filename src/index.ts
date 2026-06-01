@@ -39,7 +39,7 @@ import MoveCommandCommand from "./commands/MoveCommand";
 import { EventSubWsListener } from "@twurple/eventsub-ws";
 import NukeCommand from "./commands/NukeCommand";
 import TimerCommand from "./commands/TimerCommand";
-import { getTimer, setTimerLabel, setTimerPaused, setTimerSeconds, setTimerVisibility } from "./db/timer";
+import { getTimer, setTimerLabel, setTimerLabelVisibility, setTimerPaused, setTimerSeconds, setTimerVisibility } from "./db/timer";
 import moment from "moment";
 import NoticeCommand from "./commands/NoticeCommand";
 
@@ -1274,6 +1274,11 @@ async function initBot(c: ChatClient) {
 
                                     let newTimer = setTimerSeconds(duration_seconds);
                                     if(label !== "") setTimerLabel(label);
+                                    if(label && label?.toLowerCase() === "hide") {
+                                        setTimerLabelVisibility(false);
+                                    } else if(label !== null && label !== undefined) {
+                                        setTimerLabelVisibility(true);
+                                    }
                                     if(newTimer.paused) setTimerPaused(false);
                                     if (!newTimer.visible) setTimerVisibility(true);
 
