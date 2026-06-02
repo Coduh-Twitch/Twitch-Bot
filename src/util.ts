@@ -184,54 +184,66 @@ export interface Clip {
     embedUrl: string;
     views: number;
     channel: string;
+    duration_seconds: number;
+    portrait_download_url: string | null;
+    download_url: string;
+    creator_profile_image: string;
 }
 
 export const getClips = async (featured_only: boolean = false, sort_by: "views" | "newest" | "oldest" = "views"): Promise<Clip[]> => {
     try {
-        let testing = true;
+        let testing = false;
         let testUser = await apiClient.users.getUserByName("coduh");
         let clips = (await broadcasterApiClient.clips.getClipsForBroadcaster(testing ? testUser.id : process.env.CHANNEL_ID));
 
-        console.log("clips", clips)
+        console.log("clips", clips.data)
         if (!clips.data) return [];
-        console.log("data", clips.data)
+        // console.log("data", clips.data)
 
         let filteredClips: Clip[] = await Promise.all(clips.data.map(async (clip: HelixClip) => {
             let game = await clip.getGame();
 
-            let clipData: Clip = { id: clip.id, game: game.name, gameId: game.id, createdDate: clip.creationDate, title: clip.title, creatorName: clip.creatorDisplayName, creatorId: clip.creatorId, featured: clip.isFeatured, embedUrl: clip.embedUrl, views: clip.views, channel: clip.broadcasterDisplayName.toLowerCase() }
+            let clipper = await clip.getCreator();
+
+
+            let clipData: Clip = { id: clip.id, game: game.name, gameId: game.id, createdDate: clip.creationDate, title: clip.title, creatorName: clip.creatorDisplayName, creatorId: clip.creatorId, featured: clip.isFeatured, embedUrl: clip.embedUrl, views: clip.views, channel: clip.broadcasterDisplayName.toLowerCase(), duration_seconds: clip.duration, download_url: "", portrait_download_url: null, creator_profile_image: clipper.profilePictureUrl }
 
             return clipData;
         })) || [];
 
         if (featured_only) filteredClips = filteredClips.filter(c => c.featured);
-        if(sort_by === "views") filteredClips = filteredClips.sort((a, b) => b.views - a.views);
-        if(sort_by === "newest") filteredClips = filteredClips.sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime());
-        if(sort_by === "oldest") filteredClips = filteredClips.sort((a, b) => a.createdDate.getTime() - b.createdDate.getTime());
+        if (sort_by === "views") filteredClips = filteredClips.sort((a, b) => b.views - a.views);
+        if (sort_by === "newest") filteredClips = filteredClips.sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime());
+        if (sort_by === "oldest") filteredClips = filteredClips.sort((a, b) => a.createdDate.getTime() - b.createdDate.getTime());
 
-        return filteredClips;
+        return filteredClips.filter(c => c !== null);
     } catch (e) {
         console.log(e);
         return [];
     }
 }
 
-export const randomClip = async (): Promise<Clip> => {
+export const randomClip = async (exclude_id: string | null = null): Promise<Clip> => {
     let clips = await getClips(false, "newest");
-    let random = clips[Math.floor(Math.random() * clips.length)] || clips[0] || null;
-    if(!random) return {
-        id: "ClipNotFound",
-        title: "No Clips Found :(",
-        createdDate: new Date(),
-        creatorId: "1234",
-        creatorName: "ShortBotduh",
-        embedUrl: `https://twitch.tv/${process.env.CHANNEL_NAME}`,
-        featured: false,
-        game: "Nothing",
-        gameId: "1234",
-        views: 0,
-        channel: process.env.CHANNEL_NAME
-    }
+    if(exclude_id) console.log("Excluding ID", exclude_id)
+    if(exclude_id) clips = clips.filter(c => c.id !== exclude_id);
+    let random = clips[Math.floor(Math.random() * clips.length)] || clips[0];
+    // if (!random) return {
+    //     id: "ClipNotFound",
+    //     title: "No Clips Found :(",
+    //     createdDate: new Date(),
+    //     creatorId: "1234",
+    //     creatorName: "ShortBotduh",
+    //     embedUrl: `https://twitch.tv/${process.env.CHANNEL}`,
+    //     featured: false,
+    //     game: "Nothing",
+    //     gameId: "1234",
+    //     views: 0,
+    //     channel: process.env.CHANNEL,
+    //     duration_seconds: 0,
+    //     download_url: "",
+    //     portrait_download_url: ""
+    // }
 
     return random;
 }

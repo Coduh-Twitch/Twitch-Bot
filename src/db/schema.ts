@@ -112,13 +112,17 @@ export const chosen_clip = sqliteTable("chosen_clip", {
     title: text("title").notNull(),
     game: text("game").notNull(),
     gameId: text("gameId").notNull(),
-    createdDate: integer("featured", {mode: 'timestamp_ms'}),
+    createdDate: integer("createdDate", {mode: 'timestamp_ms'}),
     featured: integer("featured", {mode: "boolean"}),
     creatorName: text("creatorName").notNull(),
     creatorId: text("creatorId").notNull(),
     embedUrl: text("embedUrl").notNull(),
     views: integer("views").notNull(),
-	channel: text("channel").notNull(),
+    duration_seconds: integer("duration_seconds").notNull(),
+	channel: text("channel").notNull().$defaultFn(() => process.env.CHANNEL),
+    download_url: text("download_url").notNull().default("https://ducky.wiki/_app/immutable/assets/duckypfptransparent.DjoImAvR.png"),
+    portrait_download_url: text("portrait_download_url"),
+    creator_profile_image: text("creator_profile_image").notNull(),
 })
 
 export const clips_visible = sqliteTable("clips_visible", {

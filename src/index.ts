@@ -81,6 +81,14 @@ let sevenWarnings: Map<string, boolean> = new Map();
 let gifterCounts: Map<string | undefined, number> = new Map();
 
 let lastScheduledMessage = "";
+export let lastFetchedClipId = null;
+
+export function setFetchedClipId(id: string): void {
+    lastFetchedClipId = id;
+    setTimeout(() => {
+        setFetchedClipId(null);
+    },10e3)
+}
 
 
 // export const authProvider = new StaticAuthProvider(process.env.CLIENT_ID, process.env.TOKEN);
