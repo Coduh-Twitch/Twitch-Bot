@@ -7,7 +7,7 @@ import { UserRoles } from "../models/user";
 const DeleteCommandCommand: ChatCommand = {
   enabled: true,
   name: "deletecommand",
-  aliases: ["delcmd", "removecommand", "delcommand"],
+  aliases: ["delcmd", "removecommand", "delcommand", "delcom"],
   help: "Delete a previously created custom command",
   userLevel: UserRoles.MOD,
   args: [
