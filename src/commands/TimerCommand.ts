@@ -1,5 +1,5 @@
 import moment from "moment";
-import { isLeadMod, reply, userHasAuthority } from "..";
+import { isLeadMod, reply, userHasAuthority, userLevelCheck } from "..";
 import { ChatCommand } from "../classes/Types";
 import {
   getTimer,
@@ -34,25 +34,25 @@ const TimerCommand: ChatCommand = {
     {
       name: "show",
       help: "Show the timer on screen",
-      userLevel: UserRoles.LEAD_MOD,
+      userLevel: UserRoles.MOD,
       args: [],
     },
     {
       name: "hide",
       help: "Hide the timer from the screen",
-      userLevel: UserRoles.LEAD_MOD,
+      userLevel: UserRoles.MOD,
       args: [],
     },
     {
       name: "pause",
       help: "Pause the timer",
-      userLevel: UserRoles.LEAD_MOD,
+      userLevel: UserRoles.MOD,
       args: [],
     },
     {
       name: "unpause",
       help: "Unpause the timer",
-      userLevel: UserRoles.LEAD_MOD,
+      userLevel: UserRoles.MOD,
       args: [],
     },
     {
@@ -80,14 +80,16 @@ const TimerCommand: ChatCommand = {
       (sc) => sc.name.toLowerCase() === subcommand,
     );
     let authority = isLeadMod(message.userInfo);
-    if (!authority || !subcommand || !subcommandData) {
+
+    let timer = getTimer();
+    let formattedDuration = moment
+      .duration(timer.seconds, "seconds")
+      .format(
+        `${timer.seconds >= 86400 ? "DD:" : ""}${timer.seconds >= 3600 ? "HH:" : ""}${timer.seconds >= 60 ? "mm:" : "[00:]"}ss`,
+      );
+
+    if (!subcommand || !subcommandData) {
       // !timer?
-      let timer = getTimer();
-      let formattedDuration = moment
-        .duration(timer.seconds, "seconds")
-        .format(
-          `${timer.seconds >= 86400 ? "DD:" : ""}${timer.seconds >= 3600 ? "HH:" : ""}${timer.seconds >= 60 ? "mm:" : "[00:]"}ss`,
-        );
 
       await reply(
         client,
@@ -96,6 +98,26 @@ const TimerCommand: ChatCommand = {
         message,
       );
     } else if (subcommand && subcommandData) {
+      let sc = TimerCommand.subCommands.find((s) => s.name === subcommand);
+      if (sc) {
+        let userLevel = sc.userLevel;
+        if (userLevel !== UserRoles.DEFAULT) {
+          console.log("LEVEL", `${userLevel}`.toLowerCase());
+          if (
+            !userLevelCheck(
+              `${userLevel}`.toLowerCase() as any,
+              true,
+              message.userInfo,
+            )
+          )
+            return await reply(
+              client,
+              user,
+              `⏱️ ${timer.paused ? `The timer is paused!${timer.seconds === 0 ? "" : ` There is ${formattedDuration} remaining.`}` : timer.seconds === 0 ? "The timer is not running!" : `The timer has ${formattedDuration} remaining!`}`,
+              message,
+            );
+        }
+      }
       if (subcommand === "set") {
         try {
           let duration = args?.[1];
