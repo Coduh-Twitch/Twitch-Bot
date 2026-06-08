@@ -828,10 +828,15 @@ async function initBot(c: ChatClient) {
       await dbUser.save();
     }
 
-    if (
-      !content.startsWith(prefix) &&
-      content.trim().toLowerCase().startsWith("pickme")
-    ) {
+    let picks = ["pickme", "!pickme", "pick me", "pick"];
+    let isRaffleEntry = false;
+
+    for (const pick of picks) {
+      if (content.trim().toLowerCase().startsWith(pick) && !isRaffleEntry)
+        isRaffleEntry = true;
+    }
+
+    if (isRaffleEntry) {
       // Raffles
       let raffle = getAllRaffles()?.[0];
       if (raffle) {
