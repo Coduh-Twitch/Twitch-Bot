@@ -72,8 +72,8 @@ const GambleCommandCommand: ChatCommand = {
         "GoatEmotey",
         "PewPewPew",
         "TwitchConHYPE",
-        "GoldPLZ",
-        "WeDidThat",
+        // "GoldPLZ",
+        // "WeDidThat",
       ];
       let r1 = Math.floor(Math.random() * emotes.length);
       let r2 = Math.floor(Math.random() * emotes.length);
