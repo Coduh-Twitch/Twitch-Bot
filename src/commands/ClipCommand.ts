@@ -10,7 +10,7 @@ const TiktokCommand: ChatCommand = {
   name: "clip",
   help: "Create a clip of the past 30 seconds",
   aliases: ["clipthat"],
-  userLevel: UserRoles.LEAD_MOD,
+  userLevel: UserRoles.VIP,
   run: async (client, user, content, message) => {
     let session = await sessionModel.findOne({
       userId: process.env.BOT_USER_ID,
