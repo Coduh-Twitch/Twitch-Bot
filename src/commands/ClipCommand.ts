@@ -26,8 +26,21 @@ const TiktokCommand: ChatCommand = {
         },
       },
     )
-      .then(async (clip) => {
-        await reply(client, user, `Created 30-second clip! ${clip}`, message);
+      .then(async ({ data }) => {
+        let clip = data?.data[0];
+        if (!clip || !clip.edit_url)
+          return await reply(
+            client,
+            user,
+            `Failed to create clip NotLikeThis`,
+            message,
+          );
+        await reply(
+          client,
+          user,
+          `Created 30-second clip! ${clip.edit_url}`,
+          message,
+        );
       })
       .catch(async (e) => {
         console.log(e);
