@@ -13,7 +13,10 @@ const TiktokCommand: ChatCommand = {
   aliases: ["leaderboard", "lb", "pointstop", "toppoints"],
   userLevel: UserRoles.DEFAULT,
   run: async (client, user, content, message) => {
-    let users = await userModel.find({ points: { $gt: 0 } });
+    let users = await userModel.find({
+      points: { $gt: 0 },
+      twitchId: { $ne: process.env.CHANNEL_ID },
+    });
     let topFiveUsers = users.sort((a, b) => b.points - a.points).slice(0, 5);
     console.log(
       topFiveUsers.map((u) => `${u.twitchId} - ${u.points}`).join("\n"),
