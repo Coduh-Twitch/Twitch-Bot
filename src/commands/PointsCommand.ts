@@ -290,7 +290,9 @@ const PointsCommand: ChatCommand = {
             points: { $gt: 0 },
             twitchId: { $ne: process.env.CHANNEL_ID },
           })
-        ).sort((a, b) => b.points - a.points);
+        )
+          .sort((a, b) => b.points - a.points)
+          .filter((a) => !["19264788", "100135110"].includes(a.twitchId));
         let theUser = allUsers.find((u) => u.twitchId === dbTarget.twitchId);
         let position = allUsers.indexOf(theUser) + 1;
 
