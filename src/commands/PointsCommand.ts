@@ -285,9 +285,12 @@ const PointsCommand: ChatCommand = {
         points = dbTarget ? dbTarget.points : 0;
         targetName = apiUser.name;
 
-        let allUsers = (await userModel.find({ points: { $gt: 0 } })).sort(
-          (a, b) => b.points - a.points,
-        );
+        let allUsers = (
+          await userModel.find({
+            points: { $gt: 0 },
+            twitchId: { $ne: process.env.CHANNEL_ID },
+          })
+        ).sort((a, b) => b.points - a.points);
         let theUser = allUsers.find((u) => u.twitchId === dbTarget.twitchId);
         let position = allUsers.indexOf(theUser) + 1;
 
