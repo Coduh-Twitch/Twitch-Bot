@@ -111,7 +111,7 @@ const GambleCommandCommand: ChatCommand = {
       } else {
         await userModel.findOneAndUpdate(
           { twitchId: message.userInfo.userId },
-          { points: points + winPoints },
+          { points: points - gamblePts + winPoints },
         );
         reply(
           client,
