@@ -20,13 +20,6 @@ enum EspnEndpoints {
   GET_COMPETITOR_SCORE = "/v2/sports/{sport}/leagues/{league}/events/{event}/competitions/{competition}/competitors/{competitor}/linescores",
 }
 
-export enum EspnSeason {
-  FOOTBALL = "football",
-  SOCCER = "soccer",
-  BASKETBALL = "basketball",
-  NONE = "none",
-}
-
 export interface EspnEventList {
   $meta: {
     parameters: {
@@ -367,22 +360,40 @@ export interface EspnOndayCalendar {
   }[];
 }
 
+export enum EspnSeason {
+  FOOTBALL = "football",
+  BASKETBALL = "basketball",
+  BASEBALL = "baseball",
+  SOCCER = "soccer",
+  NONE = "none",
+}
+
 const leagues: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "fifa.world",
   [`${EspnSeason.BASKETBALL}`]: "nba",
   [`${EspnSeason.FOOTBALL}`]: "nfl",
+  [`${EspnSeason.BASEBALL}`]: "mlb",
+};
+
+const leaguesReadable: Record<string, string> = {
+  [`${EspnSeason.SOCCER}`]: "FIFA World Cup",
+  [`${EspnSeason.BASKETBALL}`]: "National Basketball Association",
+  [`${EspnSeason.FOOTBALL}`]: "National Football League",
+  [`${EspnSeason.BASEBALL}`]: "Major League Baseball",
 };
 
 const emojis: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "⚽",
   [`${EspnSeason.BASKETBALL}`]: "🏀",
   [`${EspnSeason.FOOTBALL}`]: "🏈",
+  [`${EspnSeason.BASEBALL}`]: "⚾",
 };
 
 const periodTerms: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "Half",
   [`${EspnSeason.BASKETBALL}`]: "Quarter",
   [`${EspnSeason.FOOTBALL}`]: "Quarter",
+  [`${EspnSeason.BASEBALL}`]: "Inning",
 };
 
 export default class Espn {
@@ -402,12 +413,14 @@ export default class Espn {
   period: number;
   oldScores: { home: number; away: number };
   updated: boolean;
+  checkedSeasons: EspnSeason[];
 
   constructor(emitter: EventEmitter) {
     this.season = EspnSeason.NONE;
     this.eventEmitter = emitter;
     this.oldScores = { away: 0, home: 0 };
     this.updated = false;
+    this.checkedSeasons = [];
   }
 
   ordinalSuffix(i: number): string {
@@ -423,6 +436,10 @@ export default class Espn {
       return i.toLocaleString() + "rd";
     }
     return i.toLocaleString() + "th";
+  }
+
+  getLeagueReadable(): string {
+    return leaguesReadable[`${this.season}`];
   }
 
   formatGameStart(): string {
@@ -469,6 +486,11 @@ export default class Espn {
     return timeFromNow(new Date(this.competition.date), dateFormatter);
   }
 
+  setSeason(season: EspnSeason): Espn {
+    this.season = season;
+    return this;
+  }
+
   getScoreString(
     update: boolean = false,
     time: string = this.timeFormatted,
@@ -478,6 +500,20 @@ export default class Espn {
     } else {
       return `${emojis[`${this.season}`]} ${update ? "Score Update:" : ""} ${this.homeTeam} ${this.homeScore || 0} : ${this.awayScore || 0} ${this.awayTeam} | ${this.period === 0 ? `Game starting ${this.formatGameStart()}` : `Time ${this.season === EspnSeason.SOCCER ? "Elapsed" : "Remaining"}: ${time} | ${this.ordinalSuffix(this.period)} ${periodTerms[`${this.season}`]}`}`;
     }
+  }
+
+  resetListeners(): Espn {
+    this.season = EspnSeason.NONE;
+    this.event = null;
+    this.competition = null;
+    this.venue = null;
+    this.homeScore = undefined;
+    this.awayScore = undefined;
+    this.updated = false;
+    this.period = 0;
+    this.checkedSeasons = [];
+
+    return this;
   }
 
   async getLeagueOnDays(sport: EspnSeason): Promise<EspnOndayCalendar | null> {
@@ -502,7 +538,7 @@ export default class Espn {
       let eventData = await get(e.$ref);
       if (!eventData || !eventData.data) continue;
       let event: EspnSeasonEvent = eventData.data;
-      if (new Date(event.date).getTime() <= new Date().getTime())
+      if (new Date(event.date).getDate() <= new Date().getDate())
         nearestEvent = event;
     }
 
@@ -511,20 +547,32 @@ export default class Espn {
 
   async getCompetition(): Promise<EspnCompetition | null> {
     let comp = null;
-    for (const c of this.event.competitions) {
+    for (const c of this.event.competitions.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    )) {
       let res = await get(c.$ref);
       if (!res || !res.data) return null;
       let competition: EspnCompetition = res.data;
       let statusRes = await get(c.status.$ref);
       if (statusRes?.data && statusRes.data?.type) {
         this.venue = c.venue;
-        console.log(`Event found @ ${c.venue.fullName}`);
+        console.log(
+          `Event found @ ${c.venue.fullName} (completed: ${statusRes.data.type.completed})`,
+        );
         if (!statusRes.data.type.completed) comp = competition;
       }
     }
 
     if (!comp) {
       console.log(`No competitions Found for ${this.season}`);
+      // this.resetListeners();
+      if (this.checkedSeasons.length === Object.values(EspnSeason).length - 1)
+        this.checkedSeasons = [];
+      this.checkedSeasons.push(this.season);
+      this.event = null;
+      this.venue = null;
+      this.competition = null;
+      this.setSeason(EspnSeason.NONE);
     } else {
       console.log(`Found ${this.season} competition ${comp.id}`, comp);
     }
@@ -598,7 +646,9 @@ export default class Espn {
     this.interval = setInterval(async () => {
       if (!this.season || this.season === EspnSeason.NONE) {
         // Season Setter
-        for (const sport of Object.values(EspnSeason)) {
+        for (const sport of Object.values(EspnSeason).filter(
+          (v) => !this.checkedSeasons.includes(v),
+        )) {
           if (sport !== EspnSeason.NONE) {
             let calendar = await this.getLeagueOnDays(sport);
             let startDate = new Date(calendar.startDate);
@@ -669,6 +719,12 @@ export default class Espn {
       if (this.competition) {
         await this.updateGameClock();
         await this.updateCompetitors();
+        let updatedComp = await get(this.competition.status.$ref);
+        if (updatedComp && updatedComp.data) {
+          if (updatedComp.data.type.completed) {
+            this.resetListeners();
+          }
+        }
       }
     }, 2e3);
 
@@ -676,22 +732,24 @@ export default class Espn {
   }
 
   async sendScoreUpdate(home: number, away: number, time: string) {
-    if (home !== this.homeScore || away !== this.awayScore) {
-      if (!this.updated) {
-        this.updated = true;
-        await reply(
-          client,
-          process.env.CHANNEL,
-          this.getScoreString(true, time),
-        );
+    if (this.competition && this.event) {
+      if (home !== this.homeScore || away !== this.awayScore) {
+        if (!this.updated) {
+          this.updated = true;
+          await reply(
+            client,
+            process.env.CHANNEL,
+            this.getScoreString(true, time),
+          );
+        } else {
+          this.updated = false;
+        }
+        // setTimeout(() => {
+        //   this.updated = false;
+        // }, 30e3);
       } else {
-        this.updated = false;
+        console.log("Skipping score update");
       }
-      // setTimeout(() => {
-      //   this.updated = false;
-      // }, 30e3);
-    } else {
-      console.log("Skipping score update");
     }
   }
 
