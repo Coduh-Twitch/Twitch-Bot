@@ -363,7 +363,7 @@ export interface EspnOndayCalendar {
 export enum EspnSeason {
   FOOTBALL = "football",
   BASKETBALL = "basketball",
-  BASEBALL = "baseball",
+  // BASEBALL = "baseball",
   SOCCER = "soccer",
   NONE = "none",
 }
@@ -372,28 +372,28 @@ const leagues: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "fifa.world",
   [`${EspnSeason.BASKETBALL}`]: "nba",
   [`${EspnSeason.FOOTBALL}`]: "nfl",
-  [`${EspnSeason.BASEBALL}`]: "mlb",
+  // [`${EspnSeason.BASEBALL}`]: "mlb",
 };
 
 const leaguesReadable: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "FIFA World Cup",
   [`${EspnSeason.BASKETBALL}`]: "National Basketball Association",
   [`${EspnSeason.FOOTBALL}`]: "National Football League",
-  [`${EspnSeason.BASEBALL}`]: "Major League Baseball",
+  // [`${EspnSeason.BASEBALL}`]: "Major League Baseball",
 };
 
 const emojis: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "⚽",
   [`${EspnSeason.BASKETBALL}`]: "🏀",
   [`${EspnSeason.FOOTBALL}`]: "🏈",
-  [`${EspnSeason.BASEBALL}`]: "⚾",
+  // [`${EspnSeason.BASEBALL}`]: "⚾",
 };
 
 const periodTerms: Record<string, string> = {
   [`${EspnSeason.SOCCER}`]: "Half",
   [`${EspnSeason.BASKETBALL}`]: "Quarter",
   [`${EspnSeason.FOOTBALL}`]: "Quarter",
-  [`${EspnSeason.BASEBALL}`]: "Inning",
+  // [`${EspnSeason.BASEBALL}`]: "Inning",
 };
 
 export default class Espn {

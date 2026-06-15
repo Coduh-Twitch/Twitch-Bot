@@ -17,6 +17,7 @@ const ScoreCommand: ChatCommand = {
   enabled: true,
   name: "score",
   help: "Get the score of the current sports event being tracked",
+  userLevel: UserRoles.DEFAULT,
   subCommands: [
     {
       name: "refetch",
@@ -30,7 +31,7 @@ const ScoreCommand: ChatCommand = {
       help: "Set the current sport being tracked (MLB, NBA, FIFA WC, NFL)",
       args: [
         {
-          name: "baseball | basketball | soccer | football",
+          name: "basketball | soccer | football",
           description: `Set the tracked sport`,
           required: false,
         },
@@ -38,7 +39,6 @@ const ScoreCommand: ChatCommand = {
     },
   ],
   aliases: ["scores"],
-  userLevel: UserRoles.DEFAULT,
   run: async (client, user, content, message) => {
     let args = content
       .split(/ +/gim)
@@ -91,7 +91,7 @@ const ScoreCommand: ChatCommand = {
         if (args[1] === "basketball") ESPN.setSeason(EspnSeason.BASKETBALL);
         if (args[1] === "soccer") ESPN.setSeason(EspnSeason.SOCCER);
         if (args[1] === "football") ESPN.setSeason(EspnSeason.FOOTBALL);
-        if (args[1] === "baseball") ESPN.setSeason(EspnSeason.BASEBALL);
+        // if (args[1] === "baseball") ESPN.setSeason(EspnSeason.BASEBALL);
         await reply(
           client,
           user,
