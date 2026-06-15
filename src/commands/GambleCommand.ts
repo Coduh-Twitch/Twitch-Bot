@@ -105,7 +105,7 @@ const GambleCommandCommand: ChatCommand = {
         reply(
           client,
           user,
-          `${slotStr} -> You lost ${gamblePts} point${gamblePts === 1 ? "" : "s"} :(`,
+          `${slotStr} -> You lost ${gamblePts.toLocaleString()} point${gamblePts === 1 ? "" : "s"} :(`,
           message,
         );
       } else {
@@ -116,7 +116,7 @@ const GambleCommandCommand: ChatCommand = {
         reply(
           client,
           user,
-          `${slotStr} -> ${jackpot ? "You won the jackpot! You" : "The house felt bad, so you"} got ${winPoints} point${winPoints === 1 ? "" : "s"}${jackpot ? "!" : " back before being thrown out the back door."}`,
+          `${slotStr} -> ${jackpot ? "You won the jackpot! You" : "The house felt bad, so you"} got ${winPoints.toLocaleString()} point${winPoints === 1 ? "" : "s"}${jackpot ? "!" : " back before being thrown out the back door."}`,
           message,
         );
       }
