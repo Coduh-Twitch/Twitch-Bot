@@ -796,9 +796,9 @@ async function initBot(c: ChatClient) {
     );
   });
 
-  c.onChatClear(() => {
-    if (websocket) websocket.sendMessage("chatclear", {});
-  });
+  // c.onChatClear(() => {
+  //   if (websocket) websocket.sendMessage("chatclear", {});
+  // });
 
   c.onMessage(async (channel, user, content, msg: ChatMessage) => {
     if (msg.isFirst) {
@@ -817,7 +817,7 @@ async function initBot(c: ChatClient) {
 
     if (isBot) return;
 
-    websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
+    // websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
 
     let dbUser = await userModel.findOne({ twitchId: msg.userInfo.userId });
     if (!dbUser) {
