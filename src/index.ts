@@ -72,6 +72,9 @@ import {
 } from "./db/timer";
 import moment from "moment";
 import NoticeCommand from "./commands/NoticeCommand";
+// import TikTokConnection from "./classes/TikTokConnection";
+import { EventEmitter } from "stream";
+import Espn, { EspnSeason } from "./classes/Espn";
 
 export interface SessionData {
   userId: string;
@@ -132,6 +135,18 @@ export const authProvider = new RefreshingAuthProvider({
   clientSecret: process.env.CLIENT_SECRET,
 });
 export const apiClient = new ApiClient({ authProvider });
+
+// Custom Events
+export const emitter = new EventEmitter();
+
+// Tiktok
+// const tiktok = new TikTokConnection(
+//   process.env.TIKTOK_CHANNEL_NAME,
+//   process.env.EULER_KEY,
+// );
+
+// ESPN
+export const ESPN = new Espn(emitter);
 
 // Broadcaster Auth
 export let broadcasterAuthProvider: StaticAuthProvider | null = null;
@@ -493,6 +508,12 @@ app.use("/api", apiRouter);
 app.use("/auth", AuthRoute);
 
 async function initBot(c: ChatClient) {
+  await ESPN.init();
+  // Emitter
+  emitter.on("seasonSet", async (season: EspnSeason) => {
+    console.log(`ESPN Season detected`, season);
+  });
+
   // Timers
   setInterval(async () => {
     let timer = getTimer();
@@ -602,6 +623,18 @@ async function initBot(c: ChatClient) {
       );
     });
   }
+
+  // TikTok Chat
+  // tiktok.onMessage(async (message) => {
+  //   // console.log(
+  //   //   `TikTok message from @${message.user.uniqueId} (${message.user.nickname} | mod?: ${message.userIdentity.isModeratorOfAnchor}) -> ${message.comment}`,
+  //   // );
+  //   if (websocket && websocket.socket)
+  //     websocket.sendMessage(
+  //       "chat",
+  //       websocket.transformTikTokChatPacket(message),
+  //     );
+  // });
 
   // Chat Client
 
@@ -763,6 +796,10 @@ async function initBot(c: ChatClient) {
     );
   });
 
+  c.onChatClear(() => {
+    if (websocket) websocket.sendMessage("chatclear", {});
+  });
+
   c.onMessage(async (channel, user, content, msg: ChatMessage) => {
     if (msg.isFirst) {
       await reply(c, user, `Welcome to the chat, @${user}!`, msg);
@@ -779,6 +816,9 @@ async function initBot(c: ChatClient) {
     console.log(content);
 
     if (isBot) return;
+
+    websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
+
     let dbUser = await userModel.findOne({ twitchId: msg.userInfo.userId });
     if (!dbUser) {
       let pointsJson: {
@@ -1911,6 +1951,7 @@ async function initBot(c: ChatClient) {
 
 //     })
 // }
+// tiktok.connect();
 mongoose
   .connect(process.env.MONGO_URI, { appName: "coduh", dbName: "duh" })
   .then(() => {
