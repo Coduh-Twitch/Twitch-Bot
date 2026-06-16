@@ -22,7 +22,7 @@ const VenueCommand: ChatCommand = {
       await reply(
         client,
         user,
-        `${ESPN.homeTeam} v ${ESPN.awayTeam} @ ${ESPN.venue.fullName} (${ESPN.venue.address.city}, ${ESPN.venue.address.country})`,
+        `${ESPN.homeTeam} v ${ESPN.awayTeam} @ ${ESPN.venue.fullName} (${ESPN.venue.address.city}${ESPN.venue.address.state && !ESPN.venue.address.city.includes(ESPN.venue.address.state) ? `, ${ESPN.venue.address.state}` : ""}${ESPN.venue.address.country ? `, ${ESPN.venue.address.country}` : ""})`,
         message,
       );
     } else {

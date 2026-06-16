@@ -74,7 +74,13 @@ import moment from "moment";
 import NoticeCommand from "./commands/NoticeCommand";
 // import TikTokConnection from "./classes/TikTokConnection";
 import { EventEmitter } from "stream";
-import Espn, { EspnSeason } from "./classes/Espn";
+import Espn, {
+  EspnCompetition,
+  EspnEvents,
+  EspnEventVenue,
+  EspnSeason,
+  EspnSeasonEvent,
+} from "./classes/Espn";
 
 export interface SessionData {
   userId: string;
@@ -235,7 +241,10 @@ setInterval(async () => {
           );
         }
       } else {
-        console.log(`Broadcaster Auth Session not found.`);
+        console.log(
+          `Broadcaster Auth Session not found. Attempting to refresh via GET request`,
+        );
+        await get(`${process.env.WEB_URL}/api/users/@me`);
       }
     }
   }
@@ -390,12 +399,12 @@ let intervals: NodeJS.Timeout[] = [];
 
 const app = express();
 
-export function reply(
+export async function reply(
   c: ChatClient,
   user: string | null,
   content,
   msg?: ChatMessage,
-): void {
+): Promise<void> {
   if (!msg)
     apiClient.chat.sendChatMessageAsApp(
       process.env.BOT_USER_ID,
@@ -513,6 +522,32 @@ async function initBot(c: ChatClient) {
   emitter.on("seasonSet", async (season: EspnSeason) => {
     console.log(`ESPN Season detected`, season);
   });
+
+  emitter.on(
+    EspnEvents.GameStart,
+    (comp: EspnCompetition, venue: EspnEventVenue, event: EspnSeasonEvent) => {
+      reply(client, process.env.CHANNEL, `${event.name} | Game is Starting!`);
+    },
+  );
+
+  emitter.on(
+    EspnEvents.GameEnd,
+    (
+      competition: EspnCompetition,
+      event: EspnSeasonEvent,
+      venue: EspnEventVenue,
+      homeTeam: string,
+      awayTeam: string,
+      homeScore: number,
+      awayScore: number,
+    ) => {
+      reply(
+        client,
+        process.env.CHANNEL,
+        `${ESPN.getSeasonEmoji()} ${event.shortName} | Game is finished! Final Scores: ${homeScore > awayScore ? "🏆 " : ""}${homeTeam} ${homeScore} : ${homeScore < awayScore ? "🏆 " : ""}${awayScore} ${awayTeam} | Re-fetching events...`,
+      );
+    },
+  );
 
   // Timers
   setInterval(async () => {
