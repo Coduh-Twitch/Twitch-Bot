@@ -24,7 +24,11 @@ export default class JsonStore<T> {
     ensureDirSync(this.dirPath);
     ensureFileSync(this.filePath);
 
-    if (this.data) this.writeData();
+    if (this.data) {
+      this.writeData();
+    } else if ((this.data as Object)[0] === undefined) {
+      this.clearJson();
+    }
   }
 
   getDirPath(): string {
