@@ -445,6 +445,14 @@ export default class Espn {
     this.updated = false;
     this.checkedSeasons = [];
     this.store = new JsonStore<StoredEspnData>("sports_store");
+    if (!this.store.getJson()?.competition)
+      this.store.writeJson({
+        competition: null,
+        event: null,
+        muted: false,
+        season: EspnSeason.NONE,
+        venue: null,
+      });
     this.muted = false;
   }
 
