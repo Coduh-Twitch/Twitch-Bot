@@ -26,7 +26,7 @@ export default class JsonStore<T> {
 
     if (this.data) {
       this.writeData();
-    } else if ((this.data as Object)[0] === undefined) {
+    } else if (!this.data || (this.data as Object)[0] === undefined) {
       this.clearJson();
     }
   }
