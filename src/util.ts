@@ -226,9 +226,11 @@ export const getFollowedDate = async (login: string): Promise<Date | null> => {
       (f) => f.userId === apiUser.id,
     );
 
+    console.log("API FOLLOW DATE", apiFollower?.followDate || null);
+
     return apiFollower?.followDate || null;
   } catch (e) {
-    console.log(e);
+    console.log("GETFOLLOWEDDATE ERROR", e);
     return null;
   }
 };
