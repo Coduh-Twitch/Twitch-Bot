@@ -217,6 +217,7 @@ export const getFollowedDate = async (login: string): Promise<Date | null> => {
     let broadcasterFollowers =
       await broadcasterApiClient.channels.getChannelFollowers(
         process.env.CHANNEL_ID,
+        { id: apiUser.id },
       );
     // console.log(broadcasterFollowers.data)
     if (!broadcasterFollowers.data || broadcasterFollowers.data.length <= 0)
