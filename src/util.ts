@@ -222,6 +222,8 @@ export const getFollowedDate = async (login: string): Promise<Date | null> => {
     if (!broadcasterFollowers.data || broadcasterFollowers.data.length <= 0)
       return null;
 
+    console.log("FOLLOWER LIST", broadcasterFollowers.data);
+
     let apiFollower = broadcasterFollowers.data.find(
       (f) => f.userId === apiUser.id,
     );
