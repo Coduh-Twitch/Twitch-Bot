@@ -437,6 +437,30 @@ export async function sendAndPin(c: ChatClient, user, content) {
     });
 }
 
+export async function getPinnedMessage(): Promise<{
+  content: string;
+  id: string;
+} | null> {
+  let session = await sessionModel.findOne({ userId: process.env.BOT_USER_ID });
+  if (!session) return null;
+
+  let headers = {
+    Authorization: `Bearer ${session.accessToken}`,
+    "Client-Id": process.env.CLIENT_ID,
+  };
+
+  let pinnedMessage =
+    (
+      await get(
+        `https://api.twitch.tv/helix/chat/pins?broadcaster_id=${process.env.CHANNEL_ID}&moderator_id=${process.env.BOT_USER_ID}`,
+        { headers },
+      )
+    ).data?.data?.[0] || null;
+  if (!pinnedMessage || !pinnedMessage.message_id) return;
+
+  return { content: pinnedMessage.message.text, id: pinnedMessage.message_id };
+}
+
 export async function unpinMessage(): Promise<void> {
   let session = await sessionModel.findOne({ userId: process.env.BOT_USER_ID });
   if (!session) return;
