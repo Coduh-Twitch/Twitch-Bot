@@ -219,22 +219,12 @@ export const getFollowedDate = async (login: string): Promise<Date | null> => {
         process.env.CHANNEL_ID,
         { id: apiUser.id },
       );
-    // console.log(broadcasterFollowers.data)
     if (!broadcasterFollowers.data || broadcasterFollowers.data.length <= 0)
       return null;
-
-    console.log("FOLLOWER LIST", broadcasterFollowers.data);
-    console.log("SPECIFIED FOLLOWER", {
-      id: apiUser.id,
-      name: apiUser.displayName,
-      inList: broadcasterFollowers.data.some((f) => f.userId === apiUser.id),
-    });
 
     let apiFollower = broadcasterFollowers.data.find(
       (f) => f.userId === apiUser.id,
     );
-
-    console.log("API FOLLOW DATE", apiFollower?.followDate || null);
 
     return apiFollower?.followDate || null;
   } catch (e) {
