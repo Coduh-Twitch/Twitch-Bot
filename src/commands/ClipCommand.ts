@@ -5,19 +5,34 @@ import { UserRoles } from "../models/user";
 import { sessionModel } from "../models/session";
 import { DBSession } from "../db/schema";
 
-const TiktokCommand: ChatCommand = {
+let clippers: Set<string> = new Set<string>();
+
+const ClipCommand: ChatCommand = {
   enabled: true,
   name: "clip",
   help: "Create a clip of the past 30 seconds",
   aliases: ["clipthat"],
-  userLevel: UserRoles.VIP,
+  userLevel: UserRoles.DEFAULT,
   run: async (client, user, content, message) => {
+    let clipTitle = content.trim();
+
     let session = await sessionModel.findOne({
       userId: process.env.BOT_USER_ID,
     });
 
+    if (clippers.has(message.userInfo.userId)) {
+      reply(
+        client,
+        user,
+        `Please wait a moment before creating another clip FailFish`,
+        message,
+      );
+
+      return;
+    }
+
     post(
-      `https://api.twitch.tv/helix/clips?broadcaster_id=${process.env.CHANNEL_ID}&duration=30&title=${Intl.DateTimeFormat("en-us", { dateStyle: "long" }).format(new Date())} clipped by @${message.userInfo.displayName}`,
+      `https://api.twitch.tv/helix/clips?broadcaster_id=${process.env.CHANNEL_ID}&duration=30&title=${clipTitle && clipTitle !== "" ? clipTitle : `${Intl.DateTimeFormat("en-us", { dateStyle: "long" }).format(new Date())} clipped`} by @${message.userInfo.displayName}`,
       {},
       {
         headers: {
@@ -41,6 +56,12 @@ const TiktokCommand: ChatCommand = {
           `Created 30-second clip! ${clip.edit_url}`,
           message,
         );
+        if (!clippers.has(message.userInfo.userId)) {
+          clippers.add(message.userInfo.userId);
+          setTimeout(() => {
+            clippers.delete(message.userInfo.userId);
+          }, 10e3);
+        }
       })
       .catch(async (e) => {
         console.log(e);
@@ -49,4 +70,4 @@ const TiktokCommand: ChatCommand = {
   },
 };
 
-export default TiktokCommand;
+export default ClipCommand;
