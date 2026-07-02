@@ -752,7 +752,7 @@ async function initBot(c: ChatClient) {
 
   // Hand out points to all chatters and reset all bot points
   setInterval(async () => {
-    for (const bot of KNOWN_BOT_NAMES) {
+    for (const bot of [...KNOWN_BOT_NAMES, process.env.BOT_USER_NAME]) {
       try {
         let user = await apiClient.users.getUserByName(bot);
         if (user) {
@@ -761,8 +761,12 @@ async function initBot(c: ChatClient) {
             dbUser.set("points", 0);
             await dbUser.save();
             console.log(`Reset ${user.displayName} points to 0`);
-          }
-        }
+          } else
+            console.log(
+              `Failed to fetch db entry for ${user.displayName} to reset their points.`,
+            );
+        } else
+          console.log(`Failed to fetch bot user ${bot} to reset their points.`);
       } catch (e) {
         console.log(`Failed to reset bot points`, e);
       }
