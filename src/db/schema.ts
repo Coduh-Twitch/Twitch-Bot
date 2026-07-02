@@ -157,3 +157,27 @@ export const clips_visible = sqliteTable("clips_visible", {
   channel: text("channel").notNull().primaryKey(),
   visible: integer("visible", { mode: "boolean" }).notNull().default(false),
 });
+
+export const giveaways = sqliteTable("giveaways", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID())
+    .notNull(),
+  created_at: integer("created_at").notNull(),
+  ends_at: integer("ends_at").notNull(),
+  winners: integer("winners").notNull().default(1),
+  created_by: text("created_by").notNull(),
+  prize: text("prize").notNull(),
+});
+
+export const giveaway_entries = sqliteTable("giveaway_entries", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID())
+    .notNull(),
+  giveaway_id: text("giveaway_id")
+    .notNull()
+    .references(() => giveaways.id),
+  user_id: text("user_id").notNull(),
+  entries: integer("entries").notNull().default(1),
+});
