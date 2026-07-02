@@ -750,8 +750,23 @@ async function initBot(c: ChatClient) {
     }
   }, 1e3);
 
-  // Hand out points to all chatters
+  // Hand out points to all chatters and reset all bot points
   setInterval(async () => {
+    for (const bot of KNOWN_BOT_NAMES) {
+      try {
+        let user = await apiClient.users.getUserByName(bot);
+        if (user) {
+          let dbUser = await userModel.findOne({ twitchId: user.id });
+          if (dbUser && dbUser.points > 0) {
+            dbUser.set("points", 0);
+            await dbUser.save();
+            console.log(`Reset ${user.displayName} points to 0`);
+          }
+        }
+      } catch (e) {
+        console.log(`Failed to reset bot points`, e);
+      }
+    }
     let stream = await apiClient.streams.getStreamByUserId(
       process.env.CHANNEL_ID,
     );
