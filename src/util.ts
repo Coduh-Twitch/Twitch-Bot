@@ -50,6 +50,34 @@ export const setRoomCode = async (roomCode: string): Promise<boolean> => {
   }
 };
 
+// Credit - Fisher-Yates Shuffle Algorithm
+// https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+export function shuffle<T = any>(array: T[]): T[] {
+  let currentIndex = array.length;
+
+  while (currentIndex != 0) {
+    let randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+
+    [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex],
+      array[currentIndex],
+    ];
+  }
+
+  return array;
+}
+
+export const longDateFormat = (time: number | Date): string => {
+  let dateFormatter = new Intl.DateTimeFormat("en-US", {
+    dateStyle: "long",
+    timeStyle: "long",
+    timeZone: "America/New_York",
+  });
+
+  return dateFormatter.format(time);
+};
+
 export const getRoomCode = async (): Promise<string | null> => {
   let dbUser = await userModel.findOne({ twitchId: process.env.CHANNEL_ID });
   if (!dbUser || !dbUser?.game_code) return null;

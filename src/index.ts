@@ -47,6 +47,7 @@ import {
   setTags,
   setTitle,
   shoutout,
+  shuffle,
   timeAgo,
 } from "./util";
 import { readdirSync } from "fs";
@@ -81,6 +82,12 @@ import Espn, {
   EspnSeason,
   EspnSeasonEvent,
 } from "./classes/Espn";
+import {
+  deleteGiveaway,
+  getAllEntrants,
+  getAllGiveaways,
+  removeEntrant,
+} from "./db/giveaways";
 
 export interface SessionData {
   userId: string;
@@ -124,6 +131,8 @@ let fifteenWarnings: Map<string, boolean> = new Map();
 let sevenWarnings: Map<string, boolean> = new Map();
 
 let gifterCounts: Map<string | undefined, number> = new Map();
+
+const notifiedThresholds = new Set<number>();
 
 let lastScheduledMessage = "";
 export let lastFetchedClipId = null;
@@ -500,12 +509,7 @@ export function userHasAuthority(user: ChatUser): boolean {
 
 export function userLevelCheck(
   role:
-    | "viewer"
-    | "vip"
-    | "moderator"
-    | "bot"
-    | "broadcaster"
-    | "lead moderator",
+    "viewer" | "vip" | "moderator" | "bot" | "broadcaster" | "lead moderator",
   checkBroadcaster: boolean = true,
   user: ChatUser,
 ): boolean {
@@ -578,6 +582,171 @@ async function initBot(c: ChatClient) {
     let timer = getTimer();
     if (!timer.paused && timer.seconds > 0) {
       let set = setTimerSeconds(timer.seconds - 1);
+    }
+
+    // Giveaway Checks
+    let giveaways = getAllGiveaways();
+
+    for (const giveaway of giveaways) {
+      let entries = getAllEntrants(giveaway.id);
+      let now = Date.now();
+      function days_ms(d: number): number {
+        return d * (60 * 60 * 24) * 1000;
+      }
+
+      let tenDays = days_ms(10);
+      let sevenDays = days_ms(7);
+      let fiveDays = days_ms(5);
+      let threeDays = days_ms(3);
+      let oneDay = days_ms(1);
+      let twelveHours = 12 * (60 * 60) * 1000;
+      let sixHours = 6 * (60 * 60) * 1000;
+      let twoHours = 2 * (60 * 60) * 1000;
+      let oneHour = 1 * (60 * 60) * 1000;
+      let thirtyMinutes = 30 * 60 * 1000;
+      let fifteenMinutes = 15 * 60 * 1000;
+      let tenMinutes = 10 * 60 * 1000;
+      let fiveMinutes = 5 * 60 * 1000;
+      let twoMinutes = 2 * 60 * 1000;
+      let oneMinute = 1 * 60 * 1000;
+      let thirtySeconds = 30 * 1000;
+      let fifteenSeconds = 15 * 1000;
+      let sevenSeconds = 7 * 1000;
+
+      const thresholds = [
+        tenDays,
+        sevenDays,
+        fiveDays,
+        threeDays,
+        oneDay,
+        twelveHours,
+        sixHours,
+        twoHours,
+        oneHour,
+        thirtyMinutes,
+        fifteenMinutes,
+        tenMinutes,
+        fiveMinutes,
+        twoMinutes,
+        oneMinute,
+        thirtySeconds,
+        fifteenSeconds,
+        sevenSeconds,
+      ].sort((a, b) => b - a);
+      const timeRemaining = giveaway.ends_at - Date.now();
+
+      if (giveaway.ends_at <= now) {
+        if (entries.length <= 0) {
+          deleteGiveaway(giveaway.id);
+          reply(
+            client,
+            process.env.BOT_USER_NAME,
+            `NotLikeThis The giveaway for "${giveaway.prize}" has ended. Nobody signed up, so no winners have been chosen.`,
+          );
+          return;
+        }
+        let potentialIds: string[] = [];
+        for (const entry of entries) {
+          for (var i = 0; i < entry.entries; i++) {
+            potentialIds.push(entry.user_id);
+          }
+          potentialIds = shuffle(potentialIds);
+        }
+
+        let winnerIds: string[] = [];
+
+        for (var i = 0; i < giveaway.winners; i++) {
+          let rand = Math.floor(Math.random() * potentialIds.length);
+          let wId = potentialIds[rand] || potentialIds[0];
+          winnerIds.push(wId);
+          potentialIds = shuffle(potentialIds).filter((p) => p !== wId);
+        }
+
+        console.log("WINNER IDS", winnerIds);
+
+        let winners: (HelixUser | null)[] = await Promise.all(
+          winnerIds
+            .filter((w) => w !== undefined)
+            .map(async (wId) => {
+              console.log("WID", wId);
+              return (await apiClient.users.getUserById(wId)) || null;
+            }),
+        );
+
+        winners = winners.filter((w) => w !== null && w !== undefined);
+
+        if (winners.length < giveaway.winners) {
+          for (var i = 0; i < giveaway.winners - winners.length; i++) {
+            potentialIds = shuffle(potentialIds);
+
+            let rand = Math.floor(Math.random() * potentialIds.length);
+            let newWinnerId = potentialIds[rand] || potentialIds[0];
+
+            let newWinner = newWinnerId
+              ? await apiClient.users.getUserById(newWinnerId)
+              : null;
+
+            let tries = 0;
+
+            while (!newWinner && tries < 3) {
+              tries += 1;
+              rand = Math.floor(Math.random() * potentialIds.length);
+              newWinnerId = potentialIds[rand] || potentialIds[0];
+              potentialIds = shuffle(potentialIds).filter(
+                (p) => p !== newWinnerId,
+              );
+
+              if (newWinnerId)
+                newWinner =
+                  (await apiClient.users.getUserById(newWinnerId)) || null;
+            }
+
+            if (newWinner) winners.push(newWinner);
+          }
+        }
+
+        winners = winners.filter((w) => w);
+
+        console.log("WINNERS", winners.length, winners);
+
+        for (const entry of entries) {
+          removeEntrant(giveaway.id, entry.user_id);
+        }
+        deleteGiveaway(giveaway.id);
+
+        if (winners.length > 0) {
+          await apiClient.asUser(process.env.BOT_USER_ID, async (ctx) => {
+            await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {
+              message: `DinoDance The giveaway for "${giveaway.prize}" has ended and ${winners.length} winner${winners.length === 1 ? "" : "s"} ha${winners.length === 1 ? "s" : "ve"} been chosen! | The winner${winners.length === 1 ? " is" : "s are"}: ${winners.map((u) => `@${u.displayName}`).join(", ")}`,
+              color: "green",
+            });
+          });
+        }
+      } else {
+        const passed = thresholds
+          .filter((t) => timeRemaining >= t)
+          .find((t) => timeRemaining >= t);
+
+        console.log(
+          "giveaway ends " +
+            moment(giveaway.ends_at).fromNow() +
+            ` (${timeRemaining} ms)`,
+        );
+
+        if (passed && !notifiedThresholds.has(passed)) {
+          for (const threshold of thresholds) {
+            if (threshold >= passed) {
+              notifiedThresholds.add(threshold);
+            }
+          }
+          reply(
+            client,
+            process.env.BOT_USER_NAME,
+            `DinoDance The giveaway for "${giveaway.prize}" ends ${moment(giveaway.ends_at).fromNow()} (${entries.length} entrant${entries.length === 1 ? "" : "s"})! Type !join in chat to join the giveaway!`,
+          );
+        } else {
+        }
+      }
     }
   }, 1e3);
 
