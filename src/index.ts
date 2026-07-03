@@ -2001,7 +2001,7 @@ async function initBot(c: ChatClient) {
           );
         }
 
-        reply(client, user, content, msg);
+        reply(client, user, content);
       }
     }
 
