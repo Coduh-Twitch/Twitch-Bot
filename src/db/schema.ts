@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export enum DBRoles {
@@ -52,6 +53,19 @@ export interface DBRaffleParticipant {
   id: string;
   raffle_id: string;
 }
+
+export const bot_config = sqliteTable("bot_config", {
+  id: text("id").notNull().primaryKey(),
+  cheer_tts_enabled: integer("cheer_tts_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  reward_tts_enabled: integer("reward_tts_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  command_tts_enabled: integer("command_tts_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+});
 
 export const queues = sqliteTable("queues", {
   id: text("id")
@@ -180,4 +194,18 @@ export const giveaway_entries = sqliteTable("giveaway_entries", {
     .references(() => giveaways.id),
   user_id: text("user_id").notNull(),
   entries: integer("entries").notNull().default(1),
+});
+
+export const tts_queue = sqliteTable("tts_queue", {
+  id: text("id")
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  content: text("content").notNull(),
+  voice: text("voice").notNull(),
+  sent_by_id: text("sent_by_id").notNull(),
+  sent_by_username: text("sent_by_username").notNull(),
+  sent_at: integer("sent_at").notNull(),
+  bits: integer("bits").notNull().default(0),
+  is_tos: integer("is_tos", { mode: "boolean" }).notNull().default(false),
 });

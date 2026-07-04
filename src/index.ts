@@ -5,6 +5,7 @@ import axios, { AxiosError, get, post } from "axios";
 import {
   ChatCommand,
   SearchedTrack,
+  TTSVoices,
   TwitchUser,
   UserRolesStringMap,
 } from "./classes/Types";
@@ -88,6 +89,9 @@ import {
   getAllGiveaways,
   removeEntrant,
 } from "./db/giveaways";
+import { addTTS } from "./db/tts";
+import Filter from "leo-profanity";
+import { getBotConfig } from "./db/botconfig";
 
 export interface SessionData {
   userId: string;
@@ -546,6 +550,33 @@ app.use("/auth", AuthRoute);
 
 async function initBot(c: ChatClient) {
   await ESPN.init();
+
+  Filter.remove([
+    "sex",
+    "horny",
+    "cum",
+    "balls",
+    "boner",
+    "pussy",
+    "dick",
+    "shit",
+    "damn",
+    "hell",
+    "crap",
+    "ass",
+    "bitch",
+    "bastard",
+    "piss",
+    "cock",
+    "asshole",
+    "douche",
+    "prick",
+    "tits",
+    "fuck",
+    "fucker",
+    "fucking",
+  ]);
+
   // Emitter
   emitter.on("seasonSet", async (season: EspnSeason) => {
     console.log(`ESPN Season detected`, season);
@@ -1153,6 +1184,46 @@ async function initBot(c: ChatClient) {
               msg,
             );
           }
+        }
+      }
+    }
+
+    let botConfig = getBotConfig(process.env.BOT_USER_ID);
+
+    if (msg.isCheer && msg.bits > 0) {
+      if (botConfig.cheer_tts_enabled)
+        addTTS({
+          content: Filter.clean(content, { replaceKey: "*" }),
+          sent_at: Date.now(),
+          sent_by_id: msg.userInfo.userId,
+          sent_by_username: msg.userInfo.displayName,
+          voice: TTSVoices.ERIC,
+          bits: msg.bits,
+        });
+    }
+
+    if (msg.rewardId) {
+      let reward = await broadcasterApiClient.channelPoints.getCustomRewardById(
+        process.env.CHANNEL_ID,
+        msg.rewardId,
+      );
+
+      if (reward) {
+        let isTTS = false;
+        let ttsKeys = ["tts", "text to speech", "speak"];
+        for (const key of ttsKeys) {
+          if (reward.title.toLowerCase().includes(key)) isTTS = true;
+        }
+
+        if (isTTS && botConfig.reward_tts_enabled) {
+          addTTS({
+            content: Filter.clean(content, { replaceKey: "*" }),
+            sent_at: Date.now(),
+            sent_by_id: msg.userInfo.userId,
+            sent_by_username: msg.userInfo.displayName,
+            voice: TTSVoices.ERIC,
+            bits: msg.bits || 0,
+          });
         }
       }
     }
