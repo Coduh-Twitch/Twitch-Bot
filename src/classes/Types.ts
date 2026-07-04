@@ -1,6 +1,26 @@
 import { ChatClient, ChatMessage } from "@twurple/chat";
 import { UserRoles } from "../models/user";
 
+export enum TTSVoices {
+  CHRISTOPHER = "en-US-ChristopherNeural",
+  ARIA = "en-US-AriaNeural",
+  GUY = "en-US-GuyNeural",
+  BRIAN = "en-US-BrianNeural",
+  ERIC = "en-US-EricNeural",
+  ROGER = "en-US-RogerNeural",
+  CHRISTOPHER_MULTILINGUAL = "en-US-ChristopherMultilingualNeural",
+}
+
+export interface TTSQueueItem {
+  content: string;
+  voice: TTSVoices;
+  sentById: string;
+  sentByUsername: string;
+  sentAt: number;
+  bits: number;
+  isTos: boolean;
+}
+
 export interface SearchedTrack {
   id: string;
   title: string;
@@ -64,4 +84,70 @@ export interface TwitchUser {
   offline_image_url: string;
   created_at: string;
   view_count?: number;
+}
+
+// Packets
+
+export enum ChatPacketSource {
+  TIKTOK,
+  TWITCH,
+  DISCORD,
+}
+
+export interface ChatPacket {
+  source: ChatPacketSource;
+  content: string;
+  date: Date;
+  messageId: string;
+  channelId: string;
+  emoteOffsets: Record<string, string>;
+
+  twitchData?: {
+    isHighlighted: boolean;
+    isFirst: boolean;
+    isCheer: boolean;
+    isRedemption: boolean;
+    isHypeChat: boolean;
+    isReply: boolean;
+    isReturningChatter: boolean;
+
+    bits: number;
+
+    hypeChatAmount?: number | null;
+    hypeChatCurrency?: string | null;
+    hypeChatIsSystemMessage?: boolean | null;
+    hypeChatLevel?: number | null;
+    hypeChatLocalizedAmount?: number | null;
+
+    parentMessageId?: string | null;
+    parentMessageText?: string | null;
+    parentMessageUserDisplayName?: string | null;
+    parentMessageUserId?: string | null;
+    parentMessageUserName?: string | null;
+
+    rewardId?: string | null;
+    threadMessageId?: string | null;
+    threadMessageUserId: string | null;
+  };
+
+  userInfo: {
+    display_name: string;
+    login: string;
+    isMod: boolean;
+    userId: string;
+    color: string | null;
+
+    twitchData?: {
+      type: "mod" | "global_mod" | "admin" | "staff" | "default";
+      badgeInfo: Record<string, string>;
+      badges: Record<string, string>;
+
+      isArtist: boolean;
+      isLeadMod: boolean;
+      isBroadcaster: boolean;
+      isFounder: boolean;
+      isSubscriber: boolean;
+      isVip: boolean;
+    };
+  };
 }
