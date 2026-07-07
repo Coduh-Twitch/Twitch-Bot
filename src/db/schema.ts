@@ -209,3 +209,27 @@ export const tts_queue = sqliteTable("tts_queue", {
   bits: integer("bits").notNull().default(0),
   is_tos: integer("is_tos", { mode: "boolean" }).notNull().default(false),
 });
+
+export const sound_alert_rewards = sqliteTable("sound_alert_rewards", {
+  id: text("id")
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  reward_id: text("reward_id").notNull(),
+  name: text("name").notNull(),
+  audio_path: text("audio_path").notNull(),
+  created_at: integer("created_at").notNull(),
+});
+
+export const sound_alert_queue = sqliteTable("sound_alert_queue", {
+  id: text("id")
+    .notNull()
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  reward_id: text("reward_id").notNull(),
+  alert_name: text("alert_name").notNull(),
+  audio_path: text("audio_path").notNull(),
+  sent_by_id: text("sent_by_id").notNull(),
+  sent_by_username: text("sent_by_username").notNull(),
+  sent_at: integer("sent_at").notNull(),
+});

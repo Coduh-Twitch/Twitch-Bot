@@ -92,6 +92,13 @@ import {
 import { addTTS } from "./db/tts";
 import Filter from "leo-profanity";
 import { getBotConfig } from "./db/botconfig";
+import {
+  addSoundAlertToQueue,
+  deleteSoundAlertReward,
+  getAllRewards,
+  getSoundAlertFromReward,
+  updateSoundAlertRewardByRewardId,
+} from "./db/soundalerts";
 
 export interface SessionData {
   userId: string;
@@ -298,7 +305,11 @@ setInterval(async () => {
         } else {
           // await authProvider.addIntentsToUser(ud.id, ['chat'])
           if (!client.isConnected) {
-            client.connect();
+            try {
+              client.connect();
+            } catch (e) {
+              console.log("Chat client failed to connect", e);
+            }
             // await client.join(process.env.CHANNEL)
             console.log(`Connecting to Chat`);
             if (!clientReady) {
@@ -900,6 +911,57 @@ async function initBot(c: ChatClient) {
         `@${ev.broadcasterDisplayName} is now live! "${stream.title}" -> Playing "${stream.gameName}"!`,
       );
     });
+
+    broadcasterEventSub.onChannelRewardRemove(
+      process.env.CHANNEL_ID,
+      async (ev) => {
+        let dbSoundAlert = getSoundAlertFromReward(ev.id);
+        if (dbSoundAlert) {
+          deleteSoundAlertReward(ev.id);
+        }
+      },
+    );
+
+    broadcasterEventSub.onChannelRewardUpdate(
+      process.env.CHANNEL_ID,
+      async (ev) => {
+        let dbSoundAlert = getSoundAlertFromReward(ev.id);
+        if (dbSoundAlert) {
+          if (ev.title !== dbSoundAlert.name) {
+            updateSoundAlertRewardByRewardId(ev.id, {
+              ...dbSoundAlert,
+              name: ev.title,
+            });
+            await broadcasterApiClient.channelPoints.updateCustomReward(
+              process.env.CHANNEL_ID,
+              dbSoundAlert.reward_id,
+              { prompt: `Play a ${ev.title}` },
+            );
+          }
+        }
+      },
+    );
+
+    // const soundAlertRewards = getAllRewards();
+    broadcasterEventSub.onChannelRedemptionAdd(
+      process.env.CHANNEL_ID,
+      async (ev) => {
+        let dbSoundAlert = getSoundAlertFromReward(ev.rewardId);
+        if (dbSoundAlert) {
+          addSoundAlertToQueue({
+            reward_id: dbSoundAlert.reward_id,
+            alert_name: dbSoundAlert.name,
+            audio_path: dbSoundAlert.audio_path,
+            sent_at: Date.now(),
+            sent_by_id: ev.userId,
+            sent_by_username: ev.userDisplayName,
+          });
+        }
+      },
+    );
+    // for (const reward of soundAlertRewards) {
+    //   console.log(`Subscribing to events for reward ${reward.name}`);
+    // }
   }
 
   // TikTok Chat
@@ -1225,6 +1287,11 @@ async function initBot(c: ChatClient) {
             bits: msg.bits || 0,
           });
         }
+
+        // const soundAlert = getSoundAlertFromReward(reward.id);
+        // if (soundAlert) {
+
+        // }
       }
     }
 

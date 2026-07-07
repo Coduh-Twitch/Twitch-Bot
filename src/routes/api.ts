@@ -19,6 +19,12 @@ import { getChosenClip, getClipVisibility, setChosenClip } from "../db/clip";
 import { sessionModel } from "../models/session";
 import { addTTS, getTTS, getTTSQueue, removeTTS } from "../db/tts";
 import { TTSQueueItem } from "../classes/Types";
+import {
+  createSoundAlertReward,
+  getSoundAlertFromQueue,
+  getSoundAlertQueue,
+  removeSoundAlertFromQueue,
+} from "../db/soundalerts";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -64,6 +70,59 @@ const apiRouter = Router();
 //             }
 // })
 //
+
+apiRouter.get("/soundalerts/end/:id", async (req, res) => {
+  if (getSoundAlertFromQueue(req.params.id))
+    return res.send(removeSoundAlertFromQueue(req.params.id));
+
+  res.send(null);
+});
+
+apiRouter.get("/soundalerts/queue", async (req, res) => {
+  res.send(getSoundAlertQueue());
+});
+
+apiRouter.post("/soundalerts/create", async (req, res) => {
+  console.log("REQUEST", req);
+  let data = req.body;
+  let url = data?.url;
+  let name = data?.name;
+  let cost = data?.cost;
+  let color = data?.color;
+  console.log("SOUND ALERT CREATE BODY", data);
+
+  if (!data || !url || !name || !cost || !color || (cost && cost <= 0))
+    return res.send({ data: null });
+
+  try {
+    let newReward = await broadcasterApiClient.channelPoints.createCustomReward(
+      process.env.CHANNEL_ID,
+      {
+        cost,
+        title: name,
+        backgroundColor: color,
+        isEnabled: true,
+        prompt: `Play a ${name}`,
+        globalCooldown: 5,
+      },
+    );
+
+    if (!newReward) return res.send({ data: null });
+
+    let newDbReward = createSoundAlertReward({
+      audio_path: url,
+      created_at: Date.now(),
+      name: newReward.title,
+      reward_id: newReward.id,
+    });
+
+    return res.send({ data: newDbReward });
+  } catch (e) {
+    console.log(e);
+    return res.send({ data: null });
+  }
+});
+
 apiRouter.get("/tts/end/:id", async (req, res) => {
   if (getTTS(req.params.id)) return res.send(removeTTS(req.params.id));
 
