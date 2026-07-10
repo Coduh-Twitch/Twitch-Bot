@@ -69,9 +69,9 @@ const GambleCommandCommand: ChatCommand = {
         "DinoDance",
         "PopNemo",
         "SUBtember",
-        "GoatEmotey",
+        // "GoatEmotey",
         "PewPewPew",
-        "TwitchConHYPE",
+        // "TwitchConHYPE",
         // "GoldPLZ",
         // "WeDidThat",
       ];
