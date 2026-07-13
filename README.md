@@ -12,9 +12,11 @@
 # Twitch-Bot
 A Twitch chatbot utilizing broadcaster auth for extended features.
 
-Features include custom commands with variables, a points system, the abililty to sync polls with Discord, and more! 
+Features include custom commands with variables, a points system, the abililty to sync polls with Discord, and more!
+
+Thank you to GitHub user pseudo-r for [their work documenting the ESPN API](https://github.com/pseudo-r/Public-ESPN-API/tree/main)
 
 ---
 
 #### Made by @duckyyylol
-[![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)](https://ducky.wiki/travel/github) [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://ducky.wiki/travel/discord) [![ducky](https://files.ducky.wiki/share/public_assets/ducky/DuckyBadge.svg)](https://ducky.wiki) 
+[![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)](https://ducky.wiki/travel/github) [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://ducky.wiki/travel/discord) [![ducky](https://files.ducky.wiki/share/public_assets/ducky/DuckyBadge.svg)](https://ducky.wiki) [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q1I122WYHF)
