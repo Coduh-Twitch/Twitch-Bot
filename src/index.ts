@@ -922,6 +922,23 @@ async function initBot(c: ChatClient) {
       },
     );
 
+    broadcasterEventSub.onChannelChatNotification(
+      process.env.CHANNEL_ID,
+      process.env.BOT_USER_ID,
+      async (ev) => {
+        switch (ev.type) {
+          case "watch_streak": {
+            reply(
+              c,
+              ev.chatterDisplayName,
+              `@${ev.chatterDisplayName} reached a watch streak of ${(ev.streakCount || 0).toLocaleString()}`,
+            );
+            break;
+          }
+        }
+      },
+    );
+
     broadcasterEventSub.onChannelRewardUpdate(
       process.env.CHANNEL_ID,
       async (ev) => {
