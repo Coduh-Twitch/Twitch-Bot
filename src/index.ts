@@ -922,7 +922,7 @@ async function initBot(c: ChatClient) {
       },
     );
 
-    broadcasterEventSub.onChannelChatNotification(
+    clientEventSub.onChannelChatNotification(
       process.env.CHANNEL_ID,
       process.env.BOT_USER_ID,
       async (ev) => {
