@@ -931,7 +931,7 @@ async function initBot(c: ChatClient) {
             reply(
               c,
               ev.chatterDisplayName,
-              `@${ev.chatterDisplayName} reached a watch streak of ${(ev.streakCount || 0).toLocaleString()}`,
+              `@${ev.chatterDisplayName} reached a watch streak of ${(ev.streakCount || 0).toLocaleString()}! DinoDance`,
             );
             break;
           }
