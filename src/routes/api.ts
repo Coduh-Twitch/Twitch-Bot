@@ -25,6 +25,7 @@ import {
   getSoundAlertQueue,
   removeSoundAlertFromQueue,
 } from "../db/soundalerts";
+import { tts_queue } from "../db/schema";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -142,6 +143,7 @@ apiRouter.get("/tts/queue", async (req, res) => {
         ({
           id: tts.id,
           bits: tts.bits,
+          streak: tts.streak,
           content: tts.content,
           isTos: tts.is_tos,
           sentAt: tts.sent_at,
@@ -154,13 +156,22 @@ apiRouter.get("/tts/queue", async (req, res) => {
 });
 
 apiRouter.post("/tts/add", async (req, res) => {
-  let body: TTSQueueItem = req.body;
-  const { bits, content, isTos, sentAt, sentById, sentByUsername, voice } =
-    body;
-  if (!content || !sentAt || !sentById || !sentByUsername || !voice)
+  let body: typeof tts_queue.$inferInsert = req.body;
+  const {
+    bits,
+    content,
+    is_tos,
+    sent_at,
+    sent_by_id,
+    sent_by_username,
+    voice,
+    streak,
+  } = body;
+  if (!content || !sent_at || !sent_by_id || !sent_by_username || !voice)
     return res.send(null);
 
-  addTTS(body as any);
+  let tts = addTTS(body as any);
+  res.send(tts);
 });
 
 apiRouter.get("/tts/:id", async (req, res) => {

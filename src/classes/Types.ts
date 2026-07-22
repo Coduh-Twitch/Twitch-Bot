@@ -18,6 +18,7 @@ export interface TTSQueueItem {
   sentByUsername: string;
   sentAt: number;
   bits: number;
+  streak: number;
   isTos: boolean;
 }
 

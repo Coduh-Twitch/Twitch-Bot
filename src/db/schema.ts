@@ -207,6 +207,7 @@ export const tts_queue = sqliteTable("tts_queue", {
   sent_by_username: text("sent_by_username").notNull(),
   sent_at: integer("sent_at").notNull(),
   bits: integer("bits").notNull().default(0),
+  streak: integer("streak").notNull().default(0),
   is_tos: integer("is_tos", { mode: "boolean" }).notNull().default(false),
 });
 

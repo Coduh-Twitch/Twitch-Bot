@@ -933,6 +933,14 @@ async function initBot(c: ChatClient) {
               ev.chatterDisplayName,
               `@${ev.chatterDisplayName} reached a watch streak of ${(ev.streakCount || 0).toLocaleString()}! DinoDance`,
             );
+            addTTS({
+              content: Filter.clean(ev.messageText || "", { replaceKey: "*" }),
+              sent_at: Date.now(),
+              sent_by_id: ev.chatterId,
+              sent_by_username: ev.chatterDisplayName,
+              voice: TTSVoices.ERIC,
+              streak: ev.streakCount || 0,
+            });
             break;
           }
         }
