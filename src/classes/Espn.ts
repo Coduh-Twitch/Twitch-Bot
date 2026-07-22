@@ -366,10 +366,10 @@ export interface EspnOndayCalendar {
 
 export enum EspnSeason {
   HOCKEY = "hockey",
-  FOOTBALL = "football",
+  SOCCER = "soccer",
   BASKETBALL = "basketball",
   BASEBALL = "baseball",
-  SOCCER = "soccer",
+  FOOTBALL = "football",
   NONE = "none",
 }
 
