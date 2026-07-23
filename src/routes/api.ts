@@ -26,6 +26,7 @@ import {
   removeSoundAlertFromQueue,
 } from "../db/soundalerts";
 import { tts_queue } from "../db/schema";
+import { getAmazonQueue, removeAmazonItem } from "../db/amazon";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -70,7 +71,27 @@ const apiRouter = Router();
 //                 reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`)
 //             }
 // })
-//
+
+apiRouter.get("/amazon/queue", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  let queue = getAmazonQueue();
+  queue = queue.map((q) => {
+    q.categories = q.categories.split("#") as any;
+    return q;
+  });
+  res.send(queue);
+});
+
+apiRouter.post("/amazon/queue/remove/:asin", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  let queue = getAmazonQueue();
+  if (!queue.some((q) => q.asin === req.params.asin)) return res.send(null);
+  let removed = removeAmazonItem(req.params.asin);
+
+  res.send(removed);
+});
 
 apiRouter.get("/soundalerts/end/:id", async (req, res) => {
   if (getSoundAlertFromQueue(req.params.id))

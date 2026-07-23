@@ -234,3 +234,16 @@ export const sound_alert_queue = sqliteTable("sound_alert_queue", {
   sent_by_username: text("sent_by_username").notNull(),
   sent_at: integer("sent_at").notNull(),
 });
+
+export const amazon_queue = sqliteTable("amazon_queue", {
+  asin: text("asin").notNull().primaryKey(),
+  title: text("title").notNull(),
+  price: integer("price").notNull().default(0),
+  price_symbol: text("price_symbol").notNull().default("$"),
+  url: text("url").notNull().default("https://amazon.com"),
+  image_url: text("image_url").notNull(),
+  added_at: integer("added_at").notNull(),
+  added_by_id: text("added_by_id").notNull(),
+  added_by_username: text("added_by_username").notNull(),
+  categories: text("categories").notNull(),
+});

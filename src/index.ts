@@ -99,6 +99,8 @@ import {
   getSoundAlertFromReward,
   updateSoundAlertRewardByRewardId,
 } from "./db/soundalerts";
+import Amazon from "./classes/Amazon";
+import { addAmazonItem, getAmazonQueue } from "./db/amazon";
 
 export interface SessionData {
   userId: string;
@@ -173,6 +175,8 @@ export const emitter = new EventEmitter();
 
 // ESPN
 export const ESPN = new Espn(emitter);
+
+export const amazon = new Amazon(process.env.CANOPY_KEY);
 
 // Broadcaster Auth
 export let broadcasterAuthProvider: StaticAuthProvider | null = null;
@@ -1181,6 +1185,56 @@ async function initBot(c: ChatClient) {
     console.log(content);
 
     if (isBot) return;
+
+    if (
+      content.toLowerCase().includes("a.co") ||
+      content.toLowerCase().includes("amazon.com")
+    ) {
+      const product = await amazon.getProduct(content);
+      console.log("PRODUCT", product);
+      let productQueue = getAmazonQueue();
+      if (product && product.isInStock) {
+        if (productQueue.some((p) => p.asin === product.asin)) {
+          reply(
+            c,
+            user,
+            `This product is already on the suggestion list NotLikeThis`,
+            msg,
+          );
+        } else {
+          addAmazonItem({
+            added_at: Date.now(),
+            asin: product.asin,
+            title: product.title,
+            price: Math.round(product.price.value),
+            price_symbol: product.price.symbol,
+            url: product.url,
+            image_url: product.mainImageUrl,
+            added_by_id: msg.userInfo.userId,
+            added_by_username: msg.userInfo.displayName,
+            categories: product.categories.map((c) => c.name).join("#"),
+          });
+          reply(
+            c,
+            user,
+            `Added "${product.title
+              .split(" ")
+              .slice(0, 6)
+              .filter((i) => i !== undefined)
+              .join(
+                " ",
+              )}..." (${product.price.symbol}${Math.round(product.price.value).toLocaleString()}) to the suggestion list! DinoDance`,
+            msg,
+          );
+        }
+      } else
+        reply(
+          c,
+          user,
+          `Could not find that product. It may be out of stock.`,
+          msg,
+        );
+    }
 
     // websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
 
