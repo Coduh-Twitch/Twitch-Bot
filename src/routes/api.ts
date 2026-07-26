@@ -28,7 +28,6 @@ import {
 import { tts_queue } from "../db/schema";
 import { getAmazonQueue, removeAmazonItem } from "../db/amazon";
 import { getBotConfig, updateBotConfig } from "../db/botconfig";
-import { WebcastGoalUpdateMessage_LiveStreamSubGoal } from "tiktok-live-connector";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
