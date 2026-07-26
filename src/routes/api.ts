@@ -27,6 +27,8 @@ import {
 } from "../db/soundalerts";
 import { tts_queue } from "../db/schema";
 import { getAmazonQueue, removeAmazonItem } from "../db/amazon";
+import { getBotConfig, updateBotConfig } from "../db/botconfig";
+import { WebcastGoalUpdateMessage_LiveStreamSubGoal } from "tiktok-live-connector";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -71,6 +73,54 @@ const apiRouter = Router();
 //                 reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`)
 //             }
 // })
+//
+apiRouter.get("/config", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const config = getBotConfig(process.env.BOT_USER_ID);
+  res.send(config);
+});
+
+apiRouter.post("/config/set/deaths/:count", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const config = getBotConfig(process.env.BOT_USER_ID);
+  const newConfig = updateBotConfig(config.id, {
+    id: config.id,
+    death_count: Number(req.params.count),
+  });
+  res.send(newConfig);
+});
+
+apiRouter.post("/config/toggle/:overlay", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const config = getBotConfig(process.env.BOT_USER_ID);
+  let newConfig = null;
+  if (req.params.overlay.toLowerCase() === "deaths") {
+    newConfig = updateBotConfig(config.id, {
+      show_death_count: !config.show_death_count,
+      id: config.id,
+    });
+  } else if (req.params.overlay.toLowerCase() === "stuck") {
+    newConfig = updateBotConfig(config.id, {
+      show_stuck_count: !config.show_stuck_count,
+      id: config.id,
+    });
+  }
+  res.send(newConfig);
+});
+
+apiRouter.post("/config/set/stuck/:count", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const config = getBotConfig(process.env.BOT_USER_ID);
+  const newConfig = updateBotConfig(config.id, {
+    id: config.id,
+    stuck_count: Number(req.params.count),
+  });
+  res.send(newConfig);
+});
 
 apiRouter.get("/amazon/queue", async (req, res) => {
   if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)

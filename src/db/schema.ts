@@ -65,6 +65,14 @@ export const bot_config = sqliteTable("bot_config", {
   command_tts_enabled: integer("command_tts_enabled", { mode: "boolean" })
     .notNull()
     .default(false),
+  death_count: integer("death_count").notNull().default(0),
+  stuck_count: integer("stuck_count").notNull().default(0),
+  show_stuck_count: integer("show_stuck_count", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  show_death_count: integer("show_death_count", { mode: "boolean" }).default(
+    false,
+  ),
 });
 
 export const queues = sqliteTable("queues", {
