@@ -73,6 +73,7 @@ export const bot_config = sqliteTable("bot_config", {
   show_death_count: integer("show_death_count", { mode: "boolean" }).default(
     false,
   ),
+  slop_mode: integer("slop_mode").default(0),
 });
 
 export const queues = sqliteTable("queues", {
