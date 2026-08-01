@@ -102,6 +102,17 @@ apiRouter.post("/config/slopmode/:mode", async (req, res) => {
   res.send(newConfig);
 });
 
+apiRouter.post("/config/videoid/:id", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const config = getBotConfig(process.env.BOT_USER_ID);
+  const newConfig = updateBotConfig(config.id, {
+    id: config.id,
+    custom_video_id: req.params.id,
+  });
+  res.send(newConfig);
+});
+
 apiRouter.post("/config/toggle/:overlay", async (req, res) => {
   if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
     return res.send(null);

@@ -74,6 +74,7 @@ export const bot_config = sqliteTable("bot_config", {
     false,
   ),
   slop_mode: integer("slop_mode").default(0),
+  custom_video_id: text("custom_video_id").default("dQw4w9WgXcQ"),
 });
 
 export const queues = sqliteTable("queues", {
