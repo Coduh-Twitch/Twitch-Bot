@@ -53,6 +53,7 @@ const AddCommandCommand: ChatCommand = {
         id: randomUUID(),
         content: args,
         trigger: cmd,
+        cooldownSeconds: 0,
       });
 
       const doc = await newCustomCommand.save();

@@ -60,6 +60,24 @@ const EditCommandCommand: ChatCommand = {
           user,
           `Successfully Updated Command ${customCommand.trigger} (level: ${UserRolesStringMap[`${userLevel}`]})`,
         );
+      } else if (args.startsWith("-cd")) {
+        args = args.split(" ")[0];
+        let cooldown = Number(args.split("=")[1]);
+        if (Number.isNaN(cooldown))
+          return reply(client, user, `Invalid Cooldown (${cooldown})`);
+
+        const customCommand = await customCommandModel.findOneAndUpdate(
+          { trigger: cmd },
+          { cooldownSeconds: cooldown },
+        );
+        if (!customCommand)
+          return reply(client, user, `Command ${cmd} does not exist`);
+
+        reply(
+          client,
+          user,
+          `Successfully Updated Command ${customCommand.trigger} (cooldown: ${cooldown === 0 ? "None" : `${cooldown.toLocaleString()} second${cooldown === 1 ? "" : "s"}`})`,
+        );
       } else {
         const customCommand = await customCommandModel.findOneAndUpdate(
           { trigger: cmd },

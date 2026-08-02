@@ -124,6 +124,11 @@ export interface TokenResponse {
   token_type: string[];
 }
 
+export interface CustomCommandCooldown {
+  userId: string;
+  lastRan: number;
+}
+
 export const SOCIAL_LINKS = {
   discord: "https://discord.com/invite/cTVvyh3zke",
   twitch: "https://www.twitch.tv/coduh",
@@ -166,6 +171,9 @@ export const apiClient = new ApiClient({ authProvider });
 
 // Custom Events
 export const emitter = new EventEmitter();
+
+export const customCommandCooldowns: Map<string, CustomCommandCooldown[]> =
+  new Map();
 
 // Tiktok
 // const tiktok = new TikTokConnection(
@@ -1427,6 +1435,70 @@ async function initBot(c: ChatClient) {
               msg,
             );
         }
+
+        let run = true;
+
+        if ((customCmd.cooldownSeconds || 0) > 0) {
+          let userCooldown =
+            (customCommandCooldowns.get(customCmd.trigger) || []).find(
+              (c) => c.userId === msg.userInfo.userId,
+            ) || null;
+          let timeAgo = Math.floor(
+            Date.now() - customCmd.cooldownSeconds * 1000,
+          );
+
+          if (userCooldown) {
+            if ((userCooldown?.lastRan || 0) >= timeAgo) {
+              return console.log(
+                `NOT RUNNING ${customCmd.trigger} FOR ${msg.userInfo.userName} DUE TO COOLDOWN`,
+              );
+            } else if ((userCooldown?.lastRan || 0) <= timeAgo) {
+              console.log("COOLDOWN RESET");
+              customCommandCooldowns.set(customCmd.trigger, [
+                ...(customCommandCooldowns.get(customCmd.trigger) || []).filter(
+                  (c) => c.userId !== msg.userInfo.userId,
+                ),
+                { lastRan: Date.now(), userId: msg.userInfo.userId },
+              ]);
+            }
+          } else {
+            console.log("SETTING COOLDOWN");
+            customCommandCooldowns.set(customCmd.trigger, [
+              ...(customCommandCooldowns.get(customCmd.trigger) || []),
+              { userId: msg.userInfo.userId, lastRan: Date.now() },
+            ]);
+          }
+
+          //   if (customCommandCooldowns.has(customCmd.trigger)) {
+          //     const cooldowns = customCommandCooldowns.get(customCmd.trigger);
+          //     if (cooldowns.some((c) => c.userId === msg.userInfo.userId)) {
+          //       let cooldown = cooldowns.find(
+          //         (c) => c.userId === msg.userInfo.userId,
+          //       );
+
+          //       if (cooldown.lastRan <= timeAgo) {
+          //         console.log(
+          //           `can clear cooldowns for ${msg.userInfo.userName} command ${customCmd.trigger}`,
+          //         );
+          //       } else
+          //         console.log(
+          //           `${msg.userInfo.userName} is waiting to run ${customCmd.trigger}`,
+          //         );
+          //       // run = false;
+          //     } else {
+          //       customCommandCooldowns.set(customCmd.trigger, [
+          //         ...cooldowns,
+          //         { userId: msg.userInfo.userId, lastRan: Date.now() },
+          //       ]);
+          //     }
+          //   } else {
+          //     customCommandCooldowns.set(customCmd.trigger, [
+          //       { userId: msg.userInfo.userId, lastRan: Date.now() },
+          //     ]);
+          //   }
+        }
+
+        console.log(customCommandCooldowns.get(customCmd.trigger));
 
         let content = customCmd.content;
 
