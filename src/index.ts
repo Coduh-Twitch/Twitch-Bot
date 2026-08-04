@@ -74,7 +74,7 @@ import {
 } from "./db/timer";
 import moment from "moment";
 import NoticeCommand from "./commands/NoticeCommand";
-// import TikTokConnection from "./classes/TikTokConnection";
+import TikTokConnection from "./classes/TikTokConnection";
 import { EventEmitter } from "stream";
 import Espn, {
   EspnCompetition,
@@ -176,10 +176,10 @@ export const customCommandCooldowns: Map<string, CustomCommandCooldown[]> =
   new Map();
 
 // Tiktok
-// const tiktok = new TikTokConnection(
-//   process.env.TIKTOK_CHANNEL_NAME,
-//   process.env.EULER_KEY,
-// );
+const tiktok = new TikTokConnection(
+  process.env.TIKTOK_CHANNEL_NAME,
+  process.env.EULER_KEY,
+);
 
 // ESPN
 export const ESPN = new Espn(emitter);
@@ -872,6 +872,16 @@ async function initBot(c: ChatClient) {
 
   if (clientEventSub && broadcasterEventSub) {
     // EventSub
+
+    clientEventSub.onChannelChatMessageDelete(
+      process.env.CHANNEL_ID,
+      process.env.BOT_USER_ID,
+      async (ev) => {
+        if (websocket)
+          websocket.sendMessage("deleteMessage", { id: ev.messageId });
+      },
+    );
+
     clientEventSub.onChannelFollow(
       process.env.CHANNEL_ID,
       process.env.BOT_USER_ID,
@@ -1002,16 +1012,20 @@ async function initBot(c: ChatClient) {
   }
 
   // TikTok Chat
-  // tiktok.onMessage(async (message) => {
-  //   // console.log(
-  //   //   `TikTok message from @${message.user.uniqueId} (${message.user.nickname} | mod?: ${message.userIdentity.isModeratorOfAnchor}) -> ${message.comment}`,
-  //   // );
-  //   if (websocket && websocket.socket)
-  //     websocket.sendMessage(
-  //       "chat",
-  //       websocket.transformTikTokChatPacket(message),
-  //     );
-  // });
+  tiktok.onMessage(async (message) => {
+    // console.log(
+    //   `TikTok message from @${message.user.uniqueId} (${message.user.nickname} | mod?: ${message.userIdentity.isModeratorOfAnchor}) -> ${message.comment}`,
+    // );
+    if (websocket && websocket.socket)
+      websocket.sendMessage(
+        "chat",
+        websocket.transformTikTokChatPacket(message),
+      );
+  });
+
+  tiktok.onMessageDelete(async (m) => {
+    console.log(`TIKTOK MESSAGE DELETED`, m.deleteMsgIdsList);
+  });
 
   // Chat Client
 
@@ -1173,9 +1187,9 @@ async function initBot(c: ChatClient) {
     );
   });
 
-  // c.onChatClear(() => {
-  //   if (websocket) websocket.sendMessage("chatclear", {});
-  // });
+  c.onChatClear(() => {
+    if (websocket) websocket.sendMessage("chatclear", {});
+  });
 
   c.onMessage(async (channel, user, content, msg: ChatMessage) => {
     if (msg.isFirst) {
@@ -1244,7 +1258,7 @@ async function initBot(c: ChatClient) {
         );
     }
 
-    // websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
+    websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
 
     let dbUser = await userModel.findOne({ twitchId: msg.userInfo.userId });
     if (!dbUser) {
@@ -2487,7 +2501,7 @@ async function initBot(c: ChatClient) {
 
 //     })
 // }
-// tiktok.connect();
+tiktok.connect();
 mongoose
   .connect(process.env.MONGO_URI, { appName: "coduh", dbName: "duh" })
   .then(() => {
