@@ -39,6 +39,8 @@ export interface DBParticipant {
   username: string;
   role: DBRoles;
   position: number;
+  bumped: boolean;
+  joined_at: number;
 }
 
 export interface DBRaffle {
@@ -100,6 +102,8 @@ export const participants = sqliteTable("participants", {
   avatar_url: text("avatar_url").notNull(),
   username: text("username").notNull(),
   position: integer("position").notNull().default(100),
+  joined_at: integer("joined_at").$defaultFn(() => Date.now()),
+  bumped: integer("bumped", { mode: "boolean" }).default(false),
 });
 
 export const banned_users = sqliteTable("banned_users", {

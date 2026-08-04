@@ -20,14 +20,17 @@ import { sessionModel } from "../models/session";
 import { addTTS, getTTS, getTTSQueue, removeTTS } from "../db/tts";
 import { TTSQueueItem } from "../classes/Types";
 import {
+  addSoundAlertToQueue,
   createSoundAlertReward,
   getSoundAlertFromQueue,
+  getSoundAlertFromReward,
   getSoundAlertQueue,
   removeSoundAlertFromQueue,
 } from "../db/soundalerts";
 import { tts_queue } from "../db/schema";
 import { getAmazonQueue, removeAmazonItem } from "../db/amazon";
 import { getBotConfig, updateBotConfig } from "../db/botconfig";
+import { getQueue, getQueueMembers } from "../db/queues";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -72,7 +75,20 @@ const apiRouter = Router();
 //                 reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`)
 //             }
 // })
-//
+
+apiRouter.get("/gamequeue", async (req, res) => {
+  let queue = getQueue();
+  const queueMembers = queue ? getQueueMembers(queue.id) : [];
+  if (queue)
+    (queue as any).members = queueMembers.sort(
+      (a, b) => a.position - b.position,
+    );
+  const response = {
+    ...(queue || null),
+  };
+  res.send(response);
+});
+
 apiRouter.get("/config", async (req, res) => {
   if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
     return res.send(null);
@@ -173,6 +189,25 @@ apiRouter.get("/soundalerts/end/:id", async (req, res) => {
 
 apiRouter.get("/soundalerts/queue", async (req, res) => {
   res.send(getSoundAlertQueue());
+});
+
+apiRouter.post("/soundalerts/test/:rewardid", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  let alertItem = getSoundAlertFromReward(req.params.rewardid);
+  if (alertItem) {
+    addSoundAlertToQueue({
+      alert_name: alertItem.name,
+      audio_path: alertItem.audio_path,
+      reward_id: alertItem.reward_id,
+      sent_at: Date.now(),
+      sent_by_id: "1234",
+      sent_by_username: "Testing",
+    });
+  }
+
+  res.send(alertItem);
 });
 
 apiRouter.post("/soundalerts/create", async (req, res) => {
