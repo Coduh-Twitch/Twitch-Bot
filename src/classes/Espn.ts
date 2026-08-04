@@ -716,7 +716,7 @@ export default class Espn {
       this.setSeason(EspnSeason.NONE);
       this.updateStore();
     } else {
-      console.log(`Found ${this.season} competition ${comp.id}`, comp);
+      // console.log(`Found ${this.season} competition ${comp.id}`, comp);
     }
 
     return comp;
@@ -784,9 +784,9 @@ export default class Espn {
       this.savedStatus = this.statusText;
       this.statusText = res.data.type.state;
     }
-    console.log("STATUS TEXT", this.statusText);
-    console.log("FROM TIME", this.savedClock);
-    console.log("GAME TIME", this.timeFormatted);
+    // console.log("STATUS TEXT", this.statusText);
+    // console.log("FROM TIME", this.savedClock);
+    // console.log("GAME TIME", this.timeFormatted);
     return this;
   }
 
