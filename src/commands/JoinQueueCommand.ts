@@ -43,13 +43,15 @@ const JoinCommand: ChatCommand = {
       if (!apiUser)
         return reply(client, user, `Failed to join queue. Please try again.`);
 
-      let role = message.userInfo.isSubscriber
-        ? DBRoles.SUBSCRIBER
-        : message.userInfo.isVip
-          ? DBRoles.VIP
-          : message.userInfo.isMod || message.userInfo.isLeadMod
-            ? DBRoles.MOD
-            : DBRoles.DEFAULT;
+      let role = DBRoles.DEFAULT;
+      if (message.userInfo.isSubscriber) role = DBRoles.SUBSCRIBER;
+      if (message.userInfo.isVip) role = DBRoles.VIP;
+      if (
+        message.userInfo.isMod ||
+        message.userInfo.isLeadMod ||
+        message.userInfo.isBroadcaster
+      )
+        role = DBRoles.MOD;
 
       let newParticipant = addQueueMember(dbQueue.id, {
         id: message.userInfo.userId,
