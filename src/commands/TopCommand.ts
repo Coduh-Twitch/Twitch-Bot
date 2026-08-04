@@ -48,7 +48,11 @@ const TiktokCommand: ChatCommand = {
       );
     }
 
-    await reply(client, user, `Top 5 Earners: ${str.join(" | ")}`);
+    await reply(
+      client,
+      user,
+      `Top 5 Earners: ${str.join(" | ")} | View the full leaderboard: ${process.env.WEB_URL}/leaderboard`,
+    );
   },
 };
 

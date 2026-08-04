@@ -14,6 +14,8 @@ export interface User {
   points: number;
   role: UserRoles;
   game_code: string | null;
+  avatar_url: string;
+  username: string;
 }
 
 const data = new Schema<User>({
@@ -22,6 +24,8 @@ const data = new Schema<User>({
   points: Number,
   role: Number,
   game_code: String,
+  avatar_url: String,
+  username: String,
 });
 
 export const userModel = model("user", data);

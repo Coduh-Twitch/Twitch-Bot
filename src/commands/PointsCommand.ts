@@ -228,7 +228,7 @@ const PointsCommand: ChatCommand = {
               `Please provide a target and amount of points (!pts ${action} <username> <points>)`,
             );
           let points = parseInt(args[2]);
-          if (!points || Number.isNaN(points) || points <= 0)
+          if ((!points || Number.isNaN(points) || points <= 0) && points !== 0)
             return reply(
               client,
               user,

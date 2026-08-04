@@ -5,6 +5,7 @@ import {
   CHANNEL,
   client,
   commandsMap,
+  KNOWN_BOT_NAMES,
   lastFetchedClipId,
   reply,
   setFetchedClipId,
@@ -31,6 +32,7 @@ import { tts_queue } from "../db/schema";
 import { getAmazonQueue, removeAmazonItem } from "../db/amazon";
 import { getBotConfig, updateBotConfig } from "../db/botconfig";
 import { getQueue, getQueueMembers } from "../db/queues";
+import { User, userModel } from "../models/user";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -94,6 +96,53 @@ apiRouter.get("/config", async (req, res) => {
     return res.send(null);
   const config = getBotConfig(process.env.BOT_USER_ID);
   res.send(config);
+});
+
+apiRouter.get("/leaderboard", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const users = (await userModel.find({ points: { $gt: 0 } })).sort(
+    (a, b) => b.points - a.points,
+  );
+
+  let toReturn = [];
+
+  for (const user of users) {
+    let userData: User = {
+      avatar_url: user?.avatar_url || null,
+      username: user?.username || null,
+      discordId: user.discordId,
+      game_code: user.game_code,
+      points: user.points,
+      role: user.role,
+      twitchId: user.twitchId,
+    };
+
+    if (!user.username) {
+      const apiUser = await apiClient.users.getUserByIdBatched(user.twitchId);
+      if (apiUser) {
+        console.log(`mapping user ${apiUser.displayName}`);
+        userData.avatar_url = apiUser.profilePictureUrl;
+        userData.username = apiUser.displayName;
+        toReturn.push(userData);
+        user.set("username", apiUser.displayName);
+        user.set("avatar_url", apiUser.profilePictureUrl);
+        await user.save();
+      }
+    } else toReturn.push(userData);
+  }
+
+  res.send(
+    toReturn
+      .filter(
+        (u) =>
+          u.username &&
+          ![...KNOWN_BOT_NAMES, process.env.BOT_USER_NAME].includes(
+            u.username.toLowerCase(),
+          ),
+      )
+      .sort((a, b) => b.points - a.points),
+  );
 });
 
 apiRouter.post("/config/set/deaths/:count", async (req, res) => {

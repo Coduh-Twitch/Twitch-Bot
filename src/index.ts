@@ -141,6 +141,8 @@ export const KNOWN_BOT_NAMES = [
   "fossabot",
   "moobot",
   "streamlabs",
+  "creatisbot",
+  "shortbotduh",
 ];
 
 export const CHANNEL = process.env.CHANNEL;
@@ -400,6 +402,8 @@ setInterval(async () => {
                   twitchId: winner.id,
                   points: raffle.points,
                   role: UserRoles.DEFAULT,
+                  username: winner.displayName,
+                  avatar_url: winner.profilePictureUrl,
                 });
 
                 await newUser.save();
@@ -845,10 +849,13 @@ async function initBot(c: ChatClient) {
 
           let dbChatter = await userModel.findOne({ twitchId: chatter.userId });
           if (!dbChatter) {
+            let apiUser = await chatter.getUser();
             let newChatter = new userModel({
               twitchId: chatter.userId,
               role: UserRoles.DEFAULT,
               points: points,
+              username: chatter.userDisplayName,
+              avatar_url: apiUser.profilePictureUrl,
             });
 
             await newChatter.save();
@@ -1292,11 +1299,15 @@ async function initBot(c: ChatClient) {
       if (msg.userInfo.isLeadMod) role = UserRoles.LEAD_MOD;
       if (msg.userInfo.isBroadcaster) role = UserRoles.BROADCASTER;
 
+      let apiUser = await apiClient.users.getUserById(msg.userInfo.userId);
+
       await userModel.create({
         twitchId: msg.userInfo.userId,
         discordId: null,
         points: points,
         role: role,
+        username: msg.userInfo.displayName,
+        avatar_url: apiUser.profilePictureUrl,
       });
     } else {
       let role = UserRoles.DEFAULT;
@@ -1305,6 +1316,13 @@ async function initBot(c: ChatClient) {
       if (msg.userInfo.isLeadMod) role = UserRoles.LEAD_MOD;
       if (msg.userInfo.isBroadcaster) role = UserRoles.BROADCASTER;
       dbUser.role = role;
+
+      if (!dbUser.username || dbUser.username !== msg.userInfo.displayName) {
+        let apiUser = await apiClient.users.getUserById(msg.userInfo.userId);
+
+        dbUser.username = apiUser.displayName;
+        dbUser.avatar_url = apiUser.profilePictureUrl;
+      }
 
       await dbUser.save();
     }
