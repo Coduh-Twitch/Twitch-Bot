@@ -47,7 +47,7 @@ const JoinCommand: ChatCommand = {
         ? DBRoles.SUBSCRIBER
         : message.userInfo.isVip
           ? DBRoles.VIP
-          : message.userInfo.isMod
+          : message.userInfo.isMod || message.userInfo.isLeadMod
             ? DBRoles.MOD
             : DBRoles.DEFAULT;
 
