@@ -78,6 +78,37 @@ const apiRouter = Router();
 //             }
 // })
 
+apiRouter.get("/users/:userId", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const dbUser = await userModel.findOne({ twitchId: req.params.userId });
+  res.send(dbUser || null);
+});
+
+apiRouter.post("/users/:userId/addWordScore", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  let dbUser = null;
+  try {
+    dbUser = await userModel.findOne({ twitchId: req.params.userId });
+    dbUser.set("word_guesses", (dbUser.word_guesses || 0) + 1);
+    await dbUser.save();
+  } catch (e) {
+    console.log(e);
+    dbUser = new userModel({
+      twitchId: req.params.userId,
+      word_guesses: 1,
+    });
+    await dbUser.save();
+  }
+  res.send(dbUser);
+});
+
+apiRouter.get("/pastebin/:binId", async (req, res) => {
+  const text = await get(`https://pastebin.com/raw/${req.params.binId}`);
+  res.send(text?.data || null);
+});
+
 apiRouter.get("/gamequeue", async (req, res) => {
   let queue = getQueue();
   const queueMembers = queue ? getQueueMembers(queue.id) : [];
@@ -116,6 +147,7 @@ apiRouter.get("/leaderboard", async (req, res) => {
       points: user.points,
       role: user.role,
       twitchId: user.twitchId,
+      word_guesses: 0,
     };
 
     if (!user.username) {

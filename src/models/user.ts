@@ -16,6 +16,7 @@ export interface User {
   game_code: string | null;
   avatar_url: string;
   username: string;
+  word_guesses: number;
 }
 
 const data = new Schema<User>({
@@ -26,6 +27,7 @@ const data = new Schema<User>({
   game_code: String,
   avatar_url: String,
   username: String,
+  word_guesses: Number,
 });
 
 export const userModel = model("user", data);
