@@ -85,24 +85,69 @@ apiRouter.get("/users/:userId", async (req, res) => {
   res.send(dbUser || null);
 });
 
-apiRouter.post("/users/:userId/addWordScore", async (req, res) => {
-  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
-    return res.send(null);
-  let dbUser = null;
-  try {
-    dbUser = await userModel.findOne({ twitchId: req.params.userId });
-    dbUser.set("word_guesses", (dbUser.word_guesses || 0) + 1);
-    await dbUser.save();
-  } catch (e) {
-    console.log(e);
-    dbUser = new userModel({
-      twitchId: req.params.userId,
-      word_guesses: 1,
-    });
-    await dbUser.save();
-  }
-  res.send(dbUser);
-});
+apiRouter.post(
+  "/users/:userId/addWordScore/:word/:revealed_word",
+  async (req, res) => {
+    if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+      return res.send(null);
+    let apiUser = await apiClient.users.getUserById(req.params.userId);
+    let dbUser = null;
+    let points = 0;
+    console.log("PARAMS", req.params);
+
+    try {
+      dbUser = await userModel.findOne({ twitchId: req.params.userId });
+      dbUser.set("word_guesses", (dbUser.word_guesses || 0) + 1);
+      await dbUser.save();
+    } catch (e) {
+      console.log(e);
+      dbUser = new userModel({
+        twitchId: req.params.userId,
+        word_guesses: 1,
+        username: apiUser.displayName,
+      });
+
+      await dbUser.save();
+    }
+
+    if (req.params.word && req.params.revealed_word) {
+      let word = req.params.word;
+      let revealed = req.params.revealed_word;
+
+      let percentage = Math.floor((revealed.length / word.length) * 100);
+      if (percentage <= 50) {
+        points = Math.max(
+          Math.round(Math.random() * 250),
+          Math.round(Math.random() * 250),
+          Math.round(Math.random() * 250),
+        );
+      } else if (percentage <= 60) {
+        points = Math.max(
+          Math.round(Math.random() * 100),
+          Math.round(Math.random() * 100),
+          Math.round(Math.random() * 100),
+        );
+      } else
+        points = Math.max(
+          Math.round(Math.random() * 50),
+          Math.round(Math.random() * 50),
+        );
+
+      if (points > 0 && dbUser) {
+        dbUser.set("points", (dbUser?.points || 0) + points);
+        await dbUser.save();
+      }
+
+      reply(
+        client,
+        apiUser.displayName,
+        `@${apiUser.displayName} got ${points} point${points === 1 ? "" : "s"} for guessing "${word}" correctly! (${dbUser?.word_guesses || 1} word${(dbUser?.word_guesses || 1) === 1 ? "" : "s"} guessed)`,
+      );
+    }
+
+    res.send(dbUser);
+  },
+);
 
 apiRouter.get("/pastebin/:binId", async (req, res) => {
   const text = await get(`https://pastebin.com/raw/${req.params.binId}`);
