@@ -77,6 +77,7 @@ export const bot_config = sqliteTable("bot_config", {
   ),
   slop_mode: integer("slop_mode").default(0),
   custom_video_id: text("custom_video_id").default("dQw4w9WgXcQ"),
+  word: text("word"),
 });
 
 export const queues = sqliteTable("queues", {
@@ -260,4 +261,19 @@ export const amazon_queue = sqliteTable("amazon_queue", {
   added_by_id: text("added_by_id").notNull(),
   added_by_username: text("added_by_username").notNull(),
   categories: text("categories").notNull(),
+});
+
+export const word_game = sqliteTable("word_game", {
+  id: text("id")
+    .primaryKey()
+    .notNull()
+    .$defaultFn(() => randomUUID()),
+  word: text("word").notNull(),
+  revealed_part: text("revealed_part").notNull(),
+  guessed: integer("guessed", { mode: "boolean" }).notNull().default(false),
+  guesser_id: text("guesser_id").default(null),
+  guesser_username: text("guesser_username").default(null),
+  started_at: integer("game_started")
+    .notNull()
+    .$defaultFn(() => Date.now()),
 });

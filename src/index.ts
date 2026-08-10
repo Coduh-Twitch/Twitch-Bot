@@ -101,6 +101,7 @@ import {
 } from "./db/soundalerts";
 import Amazon from "./classes/Amazon";
 import { addAmazonItem, getAmazonQueue } from "./db/amazon";
+import { endWordGame, getWordGame } from "./db/wordgame";
 
 export interface SessionData {
   userId: string;
@@ -187,6 +188,8 @@ const tiktok = new TikTokConnection(
 export const ESPN = new Espn(emitter);
 
 export const amazon = new Amazon(process.env.CANOPY_KEY);
+
+endWordGame();
 
 // Broadcaster Auth
 export let broadcasterAuthProvider: StaticAuthProvider | null = null;
@@ -1265,7 +1268,15 @@ async function initBot(c: ChatClient) {
         );
     }
 
+    if (getWordGame()) {
+    }
+
     websocket.sendMessage("chat", websocket.transformTwitchChatPacket(msg));
+    if (websocket.getWordGame()) {
+      websocket
+        .getWordGame()
+        .handleGuess(msg.userInfo, content.split(" ")[0].trim().toLowerCase());
+    }
 
     let dbUser = await userModel.findOne({ twitchId: msg.userInfo.userId });
     if (!dbUser) {

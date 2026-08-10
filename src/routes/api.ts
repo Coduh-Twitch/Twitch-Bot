@@ -9,6 +9,7 @@ import {
   lastFetchedClipId,
   reply,
   setFetchedClipId,
+  websocket,
 } from "..";
 import axios, { get, post } from "axios";
 import { pollModel } from "../models/polls";
@@ -33,6 +34,7 @@ import { getAmazonQueue, removeAmazonItem } from "../db/amazon";
 import { getBotConfig, updateBotConfig } from "../db/botconfig";
 import { getQueue, getQueueMembers } from "../db/queues";
 import { User, userModel } from "../models/user";
+import { createWordGame, endWordGame, getWordGame } from "../db/wordgame";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -77,6 +79,148 @@ const apiRouter = Router();
 //                 reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`)
 //             }
 // })
+
+apiRouter.get("/words/word", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  const bc = getBotConfig(process.env.BOT_USER_ID);
+  res.send(bc.word || null);
+});
+
+apiRouter.get("/words/randomWord/:binId", async (req, res) => {
+  const text =
+    (await get(`https://pastebin.com/raw/${req.params.binId}`))?.data ||
+    "fucked";
+  const words: string[] = text
+    .trim()
+    .split(",")
+    .map((s: string) => s.trim());
+  const random = Math.floor(Math.random() * words.length);
+  const word = words[random] || words[random + 1] || words[0];
+
+  res.send({ word: word });
+});
+
+apiRouter.post("/words/endGame", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  try {
+    let bc = updateBotConfig(process.env.BOT_USER_ID, {
+      id: process.env.BOT_USER_ID,
+      word: null,
+    });
+    if (websocket && websocket.getWordGame()) endWordGame();
+    res.send(bc);
+  } catch (e) {
+    console.log("ERROR", e);
+    res.send(null);
+  }
+});
+
+apiRouter.post("/words/startGame/:binId", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  // const conf = getBotConfig(process.env.BOT_USER_ID);
+
+  // if (conf.word) return res.send(conf);
+
+  // console.log("SELECTED WORD", word);
+
+  // try {
+  //   let bc = updateBotConfig(process.env.BOT_USER_ID, {
+  //     id: process.env.BOT_USER_ID,
+  //     word: word,
+  //   });
+  //   res.send(bc);
+  // } catch (e) {
+  //   console.log("ERROR", e);
+  //   res.send(null);
+  // }
+  const game = getWordGame();
+  if (game) res.send(game);
+
+  const text =
+    (await get(`https://pastebin.com/raw/${req.params.binId}`))?.data ||
+    "fucked";
+  const words: string[] = text
+    .trim()
+    .split(",")
+    .map((s: string) => s.trim());
+  const random = Math.floor(Math.random() * words.length);
+  const word = words[random] || words[random + 1] || words[0];
+
+  const newGame = createWordGame(word);
+
+  res.send(newGame);
+});
+
+apiRouter.post("/words/guess/:guess", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const botConfig = getBotConfig(process.env.BOT_USER_ID);
+
+  res.send(
+    req.params.guess.toLowerCase() === (botConfig?.word || "").toLowerCase(),
+  );
+});
+
+apiRouter.get("/words/leaderboard", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+  const users = (await userModel.find({ word_guesses: { $ne: null } })).sort(
+    (a, b) => b.word_guesses - a.word_guesses,
+  );
+
+  // const url = new URL(req.url);
+  console.log(req);
+  let slice = 0;
+  if (req.query["slice"]) slice = Number(req.query["slice"]);
+
+  let toReturn = [];
+
+  for (const user of users) {
+    let userData: User = {
+      avatar_url: user?.avatar_url || null,
+      username: user?.username || null,
+      discordId: user.discordId,
+      game_code: user.game_code,
+      points: user.points,
+      role: user.role,
+      twitchId: user.twitchId,
+      word_guesses: user?.word_guesses || 0,
+    };
+
+    if (!user.username) {
+      const apiUser = await apiClient.users.getUserByIdBatched(user.twitchId);
+      if (apiUser) {
+        console.log(`mapping user ${apiUser.displayName}`);
+        userData.avatar_url = apiUser.profilePictureUrl;
+        userData.username = apiUser.displayName;
+        toReturn.push(userData);
+        user.set("username", apiUser.displayName);
+        user.set("avatar_url", apiUser.profilePictureUrl);
+        await user.save();
+      }
+    } else toReturn.push(userData);
+  }
+
+  toReturn = toReturn
+    .filter(
+      (u) =>
+        u.username &&
+        ![...KNOWN_BOT_NAMES, process.env.BOT_USER_NAME].includes(
+          u.username.toLowerCase(),
+        ),
+    )
+    .sort((a, b) => b.word_guesses - a.word_guesses);
+
+  if (slice > 0) toReturn = toReturn.slice(0, slice);
+
+  res.send(toReturn);
+});
 
 apiRouter.get("/users/:userId", async (req, res) => {
   if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
@@ -192,7 +336,7 @@ apiRouter.get("/leaderboard", async (req, res) => {
       points: user.points,
       role: user.role,
       twitchId: user.twitchId,
-      word_guesses: 0,
+      word_guesses: user?.word_guesses || 0,
     };
 
     if (!user.username) {

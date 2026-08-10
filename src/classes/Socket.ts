@@ -3,16 +3,27 @@ import { WebSocket, WebSocketServer, MessageEvent } from "ws";
 import { ChatPacket, ChatPacketSource } from "./Types";
 import { ChatMessage } from "@twurple/chat";
 import { WebcastChatMessage } from "tiktok-live-connector";
+import { word_game } from "../db/schema";
+import { endWordGame, getWordGame } from "../db/wordgame";
+import { get } from "axios";
+import { WordGame } from "./WordGame";
 
 export interface Packets {
   heartbeat: {};
   ok: {};
   nope: {};
-  check: {};
+  check: { id?: string; agent?: string };
   isActive: { active: boolean };
   chat: ChatPacket;
   chatclear: {};
   deleteMessage: { id: string };
+  wordGameHint: { game: typeof word_game.$inferInsert };
+  wordGameState: { game: typeof word_game.$inferInsert };
+  wordGameEnded: {
+    game: typeof word_game.$inferInsert;
+    winner_total_guesses: number;
+  };
+  wordGameConnection: { binId: string };
 }
 
 export type Packet = {
@@ -28,12 +39,25 @@ export default class Socket {
   heartbeat: NodeJS.Timeout;
   socketId: UUID;
   sockets: Map<string, WebSocket>;
+  gameSockets: Map<string, WebSocket>;
   initialized: boolean;
+  wordgame: WordGame | null;
 
   constructor(port: number) {
+    this.heartbeat = null;
     this.port = port;
     this.sockets = new Map<string, WebSocket>();
+    this.gameSockets = new Map<string, WebSocket>();
     this.initialized = false;
+    this.wordgame = null;
+  }
+
+  getSockets(): Map<string, WebSocket> {
+    return this.sockets;
+  }
+
+  getWordGame(): WordGame | null {
+    return this.wordgame;
   }
 
   createPacket<T extends keyof Packets>(command: T, data: Packets[T]) {
@@ -154,59 +178,112 @@ export default class Socket {
     return chatPacket;
   }
 
-  async initSocket(server: WebSocketServer): Promise<WebSocket> {
+  async initSocket(server: WebSocketServer): Promise<void> {
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeat = setInterval(() => {
+      this.broadcastMessage("heartbeat", {} as any);
+    }, 8000);
+
     server.on("connection", (socket: WebSocket) => {
-      this.socket = socket;
+      let localSocketId: string | null = null;
 
       socket.send(this.createPacket("check", {}));
 
-      socket.onmessage = async (m) => {
-        await this.onMessage(m);
-      };
+      socket.on("message", async (data) => {
+        const packet: Packet = JSON.parse(data.toString()) as Packet;
 
-      socket.on("close", (code, reason) => {
-        this.sockets.delete(this.socketId);
-        this.socketId = null;
-        clearInterval(this.heartbeat);
+        switch (packet.command) {
+          case "check": {
+            localSocketId = packet.data?.id || crypto.randomUUID();
+            if (packet.data.agent)
+              console.log(
+                `SOCKET ID ${localSocketId} AGENT "${packet.data.agent}"`,
+              );
+            this.sockets.set(localSocketId, socket);
+            socket.send(this.createPacket("check", {}));
+            break;
+          }
+          case "wordGameConnection": {
+            let game = getWordGame();
+            if (game && !this.wordgame) {
+              this.wordgame = new WordGame(null, () => {}, game);
+            }
+            if (!game) {
+              const text =
+                (await get(`https://pastebin.com/raw/${packet.data.binId}`))
+                  ?.data || "fucked";
+              const words = text
+                .trim()
+                .split(",")
+                .map((s: string) => s.trim());
+              const random = Math.floor(Math.random() * words.length);
+              const word = words[random] || words[random + 1] || words[0];
+
+              const wordgame = new WordGame(
+                word,
+                this.broadcastMessage.bind(this),
+                null,
+              );
+              await wordgame.startGame();
+              this.wordgame = wordgame;
+              this.broadcastMessage("wordGameState", {
+                game: wordgame.getGame(),
+              });
+            } else {
+              this.broadcastMessage("wordGameState", { game: game });
+            }
+            break;
+          }
+          case "isActive": {
+            break;
+          }
+        }
+      });
+
+      socket.on("close", () => {
+        if (localSocketId) {
+          this.sockets.delete(localSocketId);
+        }
       });
     });
-
-    return this.socket;
   }
 
   sendMessage<T extends keyof Packets>(command: T, data: Packets[T]) {
-    if (this.socket) this.socket.send(this.createPacket(command, data));
-    console.log(`Sent packet ${command}`, data);
+    for (const [id, socket] of this.sockets.entries()) {
+      if (socket && socket.readyState === 1) {
+        try {
+          socket.send(this.createPacket(command, data));
+        } catch (e) {
+          console.error(`Failed to send packet to socket ${id}`);
+        }
+      } else if (
+        socket &&
+        (socket.readyState === 2 || socket.readyState === 3)
+      ) {
+        this.sockets.delete(id);
+      }
+    }
   }
 
-  async onMessage(m: MessageEvent) {
-    console.log("Message received", m.data);
-
-    const packet: Packet = JSON.parse(m.data.toString()) as Packet;
-    console.log(packet);
-
-    switch (packet.command) {
-      case "check": {
-        if (!this.socket) throw new Error("Socket was not initialized.");
-        this.socketId = randomUUID();
-        this.sockets.set(this.socketId, this.socket);
-        this.heartbeat = setInterval(() => {
-          this.socket.send(this.createPacket("heartbeat", {}));
-        }, 8000);
-        this.socket.send(this.createPacket("check", {}));
-
-        break;
-      }
-      case "isActive": {
-        if (!this.socket) throw new Error("Socket was not initialized");
-        console.log(packet);
+  broadcastMessage<T extends keyof Packets>(command: T, data: Packets[T]) {
+    for (const [id, socket] of this.sockets.entries()) {
+      if (socket && socket.readyState === 1) {
+        try {
+          socket.send(this.createPacket(command, data));
+        } catch (e) {
+          console.error(`Failed to send packet to socket ${id}`);
+        }
+      } else if (
+        socket &&
+        (socket.readyState === 2 || socket.readyState === 3)
+      ) {
+        this.sockets.delete(id);
       }
     }
   }
 
   async initServer(): Promise<WebSocketServer> {
     const server = new WebSocket.Server({ port: this.port });
-
     this.server = server;
     return this.server;
   }
