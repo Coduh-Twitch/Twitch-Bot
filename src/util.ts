@@ -20,6 +20,7 @@ import { ensureDirSync, ensureFileSync, writeJSONSync } from "fs-extra";
 import { join } from "path";
 import { DataObject, getRawData } from "@twurple/common";
 import { ChatMessage } from "@twurple/chat";
+import * as moment from "moment";
 
 export const getDiscordCta = async (): Promise<string> => {
   const guildInvite = "cTVvyh3zke";
@@ -370,32 +371,43 @@ export const randomClip = async (
 };
 
 export const timeAgo = (date: Date) => {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  const duration = moment.duration(Date.now() - date.getTime(), "milliseconds");
+  // const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  const years = duration.years();
+  const months = duration.months();
+  const days = duration.days();
+  const hours = duration.hours();
+  const minutes = duration.minutes();
+  const seconds = duration.seconds();
 
-  let interval = Math.floor(seconds / 31536000);
-  if (interval > 1) {
-    return interval + " years ago";
+  const units = [];
+
+  // let years = Math.floor(seconds / 31536000);
+  if (years > 0) {
+    units.push(years + ` year${years === 1 ? "" : "s"}`);
   }
 
-  interval = Math.floor(seconds / 2592000);
-  if (interval > 1) {
-    return interval + " months ago";
+  // let months = Math.floor(seconds / 2592000);
+  if (months > 0) {
+    units.push(months + ` month${months === 1 ? "" : "s"}`);
   }
 
-  interval = Math.floor(seconds / 86400);
-  if (interval > 1) {
-    return interval + " days ago";
+  // let days = Math.floor(seconds / 86400);
+  if (days > 0) {
+    units.push(days + ` day${days === 1 ? "" : "s"}`);
   }
 
-  interval = Math.floor(seconds / 3600);
-  if (interval > 1) {
-    return interval + " hours ago";
+  // let hours = Math.floor(seconds / 3600);
+  if (hours > 0) {
+    units.push(hours + ` hour${hours === 1 ? "" : "s"}`);
   }
 
-  interval = Math.floor(seconds / 60);
-  if (interval > 1) {
-    return interval + " minutes ago";
+  // let minutes = Math.floor(seconds / 60);
+  if (minutes > 0) {
+    units.push(minutes + ` minute${minutes === 1 ? "" : "s"}`);
   }
+
+  if (units.length > 0) return `${units.join(", ")} ago`;
 
   if (seconds < 10) return "just now";
 

@@ -2158,6 +2158,7 @@ async function initBot(c: ChatClient) {
                 let followedDate = await getFollowedDate(
                   query !== "" ? query : msg.userInfo.userName,
                 );
+
                 replaceWith = followedDate
                   ? `${timeAgo(followedDate)}`
                   : `never`;
