@@ -398,12 +398,12 @@ export const timeAgo = (date: Date) => {
   }
 
   // let hours = Math.floor(seconds / 3600);
-  if (hours > 0 && days <= 1) {
+  if (hours > 0 && days <= 1 && months <= 0) {
     units.push(hours + ` hour${hours === 1 ? "" : "s"}`);
   }
 
   // let minutes = Math.floor(seconds / 60);
-  if (minutes > 0 && hours <= 1) {
+  if (minutes > 0 && hours <= 1 && months <= 0) {
     units.push(minutes + ` minute${minutes === 1 ? "" : "s"}`);
   }
 
