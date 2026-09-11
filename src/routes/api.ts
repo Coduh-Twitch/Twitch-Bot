@@ -35,6 +35,7 @@ import { getBotConfig, updateBotConfig } from "../db/botconfig";
 import { getQueue, getQueueMembers } from "../db/queues";
 import { User, userModel } from "../models/user";
 import { createWordGame, endWordGame, getWordGame } from "../db/wordgame";
+import { decrementCounter, deleteCounter, ensureCounter, getAllCounters, getCounter, incrementCounter, renameCounter, resetCounter } from "../db/counters";
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -79,6 +80,57 @@ const apiRouter = Router();
 //                 reply(client, user, `The service is currently unavailable. Is Spotify authenticated?`)
 //             }
 // })
+//
+apiRouter.get("/counters", async (req, res) => {
+  const counters = getAllCounters();
+  res.send(counters);
+});
+
+apiRouter.get("/counters/:id", async (req, res) => {
+  const counter = ensureCounter(req.params.id);
+  res.send(counter);
+});
+
+
+apiRouter.post("/counters/:id/increment", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  const counter = incrementCounter(req.params.id);
+  res.send(counter);
+});
+
+apiRouter.post("/counters/:id/decrement", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  const counter = decrementCounter(req.params.id);
+  res.send(counter);
+});
+
+apiRouter.post("/counters/:id/reset", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  const counter = resetCounter(req.params.id);
+  res.send(counter);
+});
+
+apiRouter.post("/counters/:id/delete", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  const counter = deleteCounter(req.params.id);
+  res.send(counter);
+});
+
+apiRouter.post("/counters/:id/rename/:name", async (req, res) => {
+  if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)
+    return res.send(null);
+
+  const counter = renameCounter(req.params.id, decodeURIComponent(req.params.name));
+  res.send(counter);
+});
 
 apiRouter.get("/words/word", async (req, res) => {
   if (!req.headers["key"] || req.headers["key"] !== process.env.CLIENT_SECRET)

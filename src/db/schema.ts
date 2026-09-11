@@ -80,6 +80,12 @@ export const bot_config = sqliteTable("bot_config", {
   word: text("word"),
 });
 
+export const counters = sqliteTable("counters", {
+  id: text("id").notNull().primaryKey(),
+  label: text("label").notNull().default("Counter"),
+  count: integer("count").notNull().default(0)
+})
+
 export const queues = sqliteTable("queues", {
   id: text("id")
     .primaryKey()
