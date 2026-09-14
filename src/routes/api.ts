@@ -5,6 +5,7 @@ import {
   CHANNEL,
   client,
   commandsMap,
+  ESPN,
   KNOWN_BOT_NAMES,
   lastFetchedClipId,
   reply,
@@ -81,6 +82,14 @@ const apiRouter = Router();
 //             }
 // })
 //
+//
+
+apiRouter.get("/espn", async (req, res) => {
+  let store = ESPN.getData();
+
+  res.send(store);
+});
+
 apiRouter.get("/counters", async (req, res) => {
   const counters = getAllCounters();
   res.send(counters);

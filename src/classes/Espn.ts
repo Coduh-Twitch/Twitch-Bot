@@ -4,6 +4,7 @@ import { get } from "axios";
 import { client, reply } from "..";
 import { join } from "path";
 import JsonStore from "./JsonStore";
+import { TransactionRollbackError } from "drizzle-orm";
 
 let serverBaseUrl = `https://sports.core.api.espn.com`;
 let siteBaseUrl = `https://site.api.espn.com/apis/site`;
@@ -413,6 +414,22 @@ interface StoredEspnData {
   muted: boolean;
 }
 
+export interface EspnData extends StoredEspnData {
+  emoji: string;
+  leagueReadable: string;
+  homeScore: number;
+  awayScore: number;
+  homeTeam: string;
+  awayTeam: string;
+  timeFormatted: string;
+  homeLogo: string;
+  awayLogo: string;
+  homeColor: string;
+  awayColor: string;
+  periodFormatted: string;
+  period: number;
+}
+
 export default class Espn {
   interval: NodeJS.Timeout;
   eventEmitter: EventEmitter;
@@ -437,6 +454,11 @@ export default class Espn {
   statusText: string;
   savedStatus: string;
   savedPeriod: number;
+
+  homeLogo: string;
+  awayLogo: string;
+  homeColor: string;
+  awayColor: string;
 
   constructor(emitter: EventEmitter) {
     this.season = EspnSeason.NONE;
@@ -547,6 +569,10 @@ export default class Espn {
     this.season = season;
     this.updateStore();
     return this;
+  }
+
+  getData(): EspnData {
+    return { ...this.store.data, emoji: this.getSeasonEmoji(), leagueReadable: this.getLeagueReadable(), homeScore: this.homeScore, homeTeam: this.homeTeam, awayScore: this.awayScore, awayTeam: this.awayTeam, timeFormatted: this.timeFormatted, awayLogo: this.awayLogo, homeLogo: this.homeLogo, homeColor: this.homeColor, awayColor: this.awayColor, periodFormatted: this.ordinalSuffix(this.period), period: this.period };
   }
 
   getSeasonEmoji(season: EspnSeason = this.season): string {
@@ -730,11 +756,15 @@ export default class Espn {
       if (!compData || !compData.data) continue;
 
       let team = teamData.data;
+      new JsonStore(`${team?.id}.json`, team);
       let comp: EspnCompetitor = compData.data;
 
       if (comp.homeAway === "home") {
         this.homeId = comp.id;
         this.homeTeam = team.displayName;
+        this.homeLogo = team.logos.filter((l: any) => l.rel.includes("scoreboard"))?.[0]?.href || team.logos[0].href;
+        this.homeColor = team.color;
+
         let score = await get(competitor.score.$ref);
         if (!score || !score.data) {
           this.homeScore = 0;
@@ -747,6 +777,9 @@ export default class Espn {
       } else {
         this.awayId = comp.id;
         this.awayTeam = team.displayName;
+        this.awayLogo = team.logos.filter((l: any) => l.rel.includes("scoreboard"))?.[0]?.href || team.logos[0].href;
+        this.awayColor = team.color;
+
         let score = await get(competitor.score.$ref);
         if (!score || !score.data) {
           this.awayScore = 0;
