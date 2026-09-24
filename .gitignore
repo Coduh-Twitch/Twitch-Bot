@@ -4,4 +4,4 @@ node_modules
 disabled_commands
 drizzle
 *.db
-data/stores/*
+data/*

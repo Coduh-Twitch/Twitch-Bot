@@ -52,7 +52,7 @@ import {
   shuffle,
   timeAgo,
 } from "./util";
-import { readdirSync } from "fs";
+import { appendFileSync, readdirSync } from "fs";
 import {
   createRaffleParticipant,
   deleteRaffle,
@@ -1119,15 +1119,23 @@ async function initBot(c: ChatClient) {
     setTimeout(async () => {
       let roomCode = await getRoomCode();
 
-      reply(c, null, `DinoDance Follow @${raider} at https://twitch.tv/${raider}!${game ? ` They were last playing ${game}!` : ""} DinoDance`);
+      reply(
+        c,
+        null,
+        `DinoDance Follow @${raider} at https://twitch.tv/${raider}!${game ? ` They were last playing ${game}!` : ""} DinoDance`,
+      );
       try {
         await shoutout(raider);
       } catch (e) {
-        console.log(`Failed to auto-shoutout ${raider}`)
+        console.log(`Failed to auto-shoutout ${raider}`);
       }
       setTimeout(async () => {
         if (!roomCode) {
-          reply(c, null, `PopNemo Welcome, raiders!${roomCode !== null ? ` If you want to join the game, use the code ${roomCode}.` : ""} Enjoy your time in the stream!`)
+          reply(
+            c,
+            null,
+            `PopNemo Welcome, raiders!${roomCode !== null ? ` If you want to join the game, use the code ${roomCode}.` : ""} Enjoy your time in the stream!`,
+          );
         } else {
           let stream = await apiClient.streams.getStreamByUserId(
             process.env.CHANNEL_ID,
@@ -1135,10 +1143,16 @@ async function initBot(c: ChatClient) {
 
           let oldPin = await getPinnedMessage();
 
-          await sendAndPin(c, null, `PopNemo Welcome, raiders!${roomCode !== null ? ` If you want to join the game, use the code ${roomCode}.` : ""} Enjoy your time in the stream!`);
+          await sendAndPin(
+            c,
+            null,
+            `PopNemo Welcome, raiders!${roomCode !== null ? ` If you want to join the game, use the code ${roomCode}.` : ""} Enjoy your time in the stream!`,
+          );
 
           setTimeout(async () => {
-            oldPin?.id ? await pinMessage(oldPin) : await sendAndPin(c, null, oldPin.content);
+            oldPin?.id
+              ? await pinMessage(oldPin)
+              : await sendAndPin(c, null, oldPin.content);
           }, 30e3);
         }
       }, 1e3);
@@ -1246,6 +1260,23 @@ async function initBot(c: ChatClient) {
     console.log(content);
 
     if (isBot) return;
+
+    if (
+      userHasAuthority(msg.userInfo) &&
+      msg.isReply &&
+      content.toLowerCase().includes("!splash")
+    ) {
+      const splashFilePath = join(process.cwd(), "data", "splashes.txt");
+      ensureFileSync(splashFilePath);
+
+      const text = msg.parentMessageText;
+      try {
+        appendFileSync(splashFilePath, `\n${text}`, { encoding: "utf8" });
+        reply(client, user, `Added "${text}" to splashes`);
+      } catch (e) {
+        reply(client, user, `Failed while adding to splashes`);
+      }
+    }
 
     if (
       content.toLowerCase().includes("a.co") ||
