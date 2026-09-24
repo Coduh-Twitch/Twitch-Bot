@@ -1,4 +1,4 @@
-import { reply } from "..";
+import { reply, userHasAuthority } from "..";
 import { ChatCommand } from "../classes/Types";
 import { getBotConfig } from "../db/botconfig";
 import { ensureCounter, getCounter, incrementCounter } from "../db/counters";
@@ -23,7 +23,10 @@ export const DeathsCommand: ChatCommand = {
     //   );
     //
     let counter = ensureCounter("chair");
-    counter = incrementCounter(counter.id);
+
+    if (userHasAuthority(message.userInfo)) {
+      counter = incrementCounter(counter.id);
+    }
 
     reply(
       client,
