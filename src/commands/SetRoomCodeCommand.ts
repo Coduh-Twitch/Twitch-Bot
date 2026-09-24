@@ -47,7 +47,7 @@ const SetRoomCodeCommand: ChatCommand = {
         await sendAndPin(
           client,
           user,
-          `${stream.gameName.includes("Mario Kart") ? `Room Code -> ` : stream.gameName.includes("Jackbox") ? `Join the Audience -> ` : ``}${newCode}`,
+          `${stream ? (stream.gameName.includes("Mario Kart") ? `Room Code -> ` : stream.gameName.includes("Jackbox") ? `Join the Audience -> ` : "") : ``}${newCode}`,
         );
       } else {
         reply(client, user, `Failed to set Room Code`, message);

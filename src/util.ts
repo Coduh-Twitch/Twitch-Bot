@@ -86,8 +86,8 @@ export const getRoomCode = async (): Promise<string | null> => {
   return dbUser.game_code;
 };
 
-export const pinMessage = async (
-  message: ChatMessage | HelixSentChatMessage,
+export const pinMessage = async <T>(
+  message: ChatMessage | HelixSentChatMessage | { id: string; },
   durationSeconds: number | null = null,
 ): Promise<boolean> => {
   let session = await sessionModel.findOne({ userId: process.env.BOT_USER_ID });

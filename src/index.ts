@@ -41,6 +41,7 @@ import RoomCodeCommand from "./commands/RoomCodeCommand";
 import {
   getFollowedDate,
   getGame,
+  getRoomCode,
   getUser,
   getWeather,
   pinMessage,
@@ -1114,6 +1115,34 @@ async function initBot(c: ChatClient) {
       null,
       `DinoDance @${raider} thank you for the RAID! ${raider} just brought in ${raid.viewerCount.toLocaleString()} viewer${raid.viewerCount === 1 ? "" : "s"}${game ? ` from their ${game} stream!` : "!"} PewPewPew`,
     );
+
+    setTimeout(async () => {
+      let roomCode = await getRoomCode();
+
+      reply(c, null, `DinoDance Follow @${raider} at https://twitch.tv/${raider}!${game ? ` They were last playing ${game}!` : ""} DinoDance`);
+      try {
+        await shoutout(raider);
+      } catch (e) {
+        console.log(`Failed to auto-shoutout ${raider}`)
+      }
+      setTimeout(async () => {
+        if (!roomCode) {
+          reply(c, null, `PopNemo Welcome, raiders!${roomCode !== null ? ` If you want to join the game, use the code ${roomCode}.` : ""} Enjoy your time in the stream!`)
+        } else {
+          let stream = await apiClient.streams.getStreamByUserId(
+            process.env.CHANNEL_ID,
+          );
+
+          let oldPin = await getPinnedMessage();
+
+          await sendAndPin(c, null, `PopNemo Welcome, raiders!${roomCode !== null ? ` If you want to join the game, use the code ${roomCode}.` : ""} Enjoy your time in the stream!`);
+
+          setTimeout(async () => {
+            oldPin?.id ? await pinMessage(oldPin) : await sendAndPin(c, null, oldPin.content);
+          }, 30e3);
+        }
+      }, 1e3);
+    }, 10e3);
   });
 
   c.onResub(async (channel, user, sub, msg) => {
