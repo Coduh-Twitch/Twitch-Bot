@@ -1,0 +1,47 @@
+import { prefix, reply } from "../index";
+import { ChatCommand } from "../classes/Types";
+import { customCommandModel } from "../models/command";
+import { randomUUID } from "node:crypto";
+import { UserRoles } from "../models/user";
+
+const ReadCommandCommand: ChatCommand = {
+  enabled: true,
+  name: "readcommand",
+  aliases: ["readcmd", "rdcommand", "readcom"],
+  help: "Read the raw contents of a custom command",
+  userLevel: UserRoles.MOD,
+  args: [
+    {
+      name: "trigger",
+      description: "The trigger of the custom command you'd like to read",
+      required: true,
+    },
+  ],
+  run: async (client, user, content, message) => {
+    content = content.trim();
+    let cmd = content.split(" ")[0];
+    console.log(cmd);
+
+    try {
+      const customCommand = await customCommandModel.findOne({
+        trigger: cmd,
+      });
+      if (!customCommand)
+        return reply(client, user, `Command ${cmd} does not exist`);
+
+      reply(
+        client,
+        user,
+        `Command ${customCommand.trigger} Output: ${customCommand.content}`,
+      );
+    } catch (e) {
+      reply(
+        client,
+        user,
+        `Failed while trying to read command. Please try again.`,
+      );
+    }
+  },
+};
+
+export default ReadCommandCommand;
