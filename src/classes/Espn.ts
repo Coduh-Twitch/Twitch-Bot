@@ -586,7 +586,7 @@ export default class Espn {
     if (this.period === 0) {
       return `${emojis[`${this.season}`]} ${this.homeTeam} v ${this.awayTeam} | ${this.period === 0 ? `Game starting ${this.formatGameStart()}` : `Time ${this.season === EspnSeason.SOCCER ? "Elapsed" : "Remaining"}: ${time} | ${this.ordinalSuffix(this.period)} ${periodTerms[`${this.season}`]}`}`;
     } else {
-      return `${emojis[`${this.season}`]} ${update ? "Score Update:" : ""} ${this.homeTeam} ${this.homeScore || 0} <> ${this.awayScore || 0} ${this.awayTeam} ${this.period === 0 || (this.season === EspnSeason.BASEBALL && this.statusText !== "in") ? `| Game starting ${this.formatGameStart()}` : `${this.season === EspnSeason.BASEBALL ? `` : `Time ${this.season === EspnSeason.SOCCER ? "Elapsed" : "Remaining"}: ${time}`} | ${this.season === EspnSeason.SOCCER && this.period === 3 ? "Overtime" : `${this.ordinalSuffix(this.period)} ${periodTerms[`${this.season}`]}`}`}`;
+      return `${emojis[`${this.season}`]} ${update ? "Score Update:" : ""} ${this.homeTeam} ${this.homeScore || 0} <> ${this.awayScore || 0} ${this.awayTeam} ${this.period === 0 || (this.season === EspnSeason.BASEBALL && this.statusText !== "in") ? `| Game starting ${this.formatGameStart()}` : `${this.season === EspnSeason.BASEBALL ? `` : `| Time ${this.season === EspnSeason.SOCCER ? "Elapsed" : "Remaining"}: ${time}`} | ${this.season === EspnSeason.SOCCER && this.period === 3 ? "Overtime" : `${this.ordinalSuffix(this.period)} ${periodTerms[`${this.season}`]}`}`}`;
     }
   }
 
