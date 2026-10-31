@@ -1874,7 +1874,7 @@ async function initBot(c: ChatClient) {
 
               if (tagContent.endsWith("noformat")) format = false;
 
-              let random = Math.floor(Math.random() * randSplit[1]);
+              let random = Math.round(Math.random() * randSplit[1]);
               console.log("RANDOM", random);
               if (random < randSplit[0])
                 random = random + (randSplit[0] - random);
