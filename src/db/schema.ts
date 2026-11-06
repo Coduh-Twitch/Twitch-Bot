@@ -56,6 +56,16 @@ export interface DBRaffleParticipant {
   raffle_id: string;
 }
 
+export interface DBAutoshoutout {
+  user_id: string;
+  last_notified: number;
+}
+
+export interface DBAutoshoutoutQueueItem {
+  user_id: string;
+  position: number;
+}
+
 export const bot_config = sqliteTable("bot_config", {
   id: text("id").notNull().primaryKey(),
   cheer_tts_enabled: integer("cheer_tts_enabled", { mode: "boolean" })
@@ -78,6 +88,7 @@ export const bot_config = sqliteTable("bot_config", {
   slop_mode: integer("slop_mode").default(0),
   custom_video_id: text("custom_video_id").default("dQw4w9WgXcQ"),
   word: text("word"),
+  last_shoutout: integer().notNull().default(0)
 });
 
 export const counters = sqliteTable("counters", {
@@ -283,3 +294,13 @@ export const word_game = sqliteTable("word_game", {
     .notNull()
     .$defaultFn(() => Date.now()),
 });
+
+export const auto_shoutouts = sqliteTable("auto_shoutouts", {
+  user_id: text().notNull().primaryKey(),
+  last_notified: integer().notNull().default(0)
+})
+
+export const auto_shoutout_queue = sqliteTable("auto_shoutout_queue", {
+  user_id: text().notNull().primaryKey(),
+  position: integer().notNull().default(0)
+})

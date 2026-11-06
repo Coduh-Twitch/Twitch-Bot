@@ -49,6 +49,7 @@ import {
   setTags,
   setTitle,
   shoutout,
+  shoutoutById,
   shuffle,
   timeAgo,
 } from "./util";
@@ -92,7 +93,7 @@ import {
 } from "./db/giveaways";
 import { addTTS } from "./db/tts";
 import Filter from "leo-profanity";
-import { getBotConfig } from "./db/botconfig";
+import { getBotConfig, updateBotConfig } from "./db/botconfig";
 import {
   addSoundAlertToQueue,
   deleteSoundAlertReward,
@@ -103,6 +104,7 @@ import {
 import Amazon from "./classes/Amazon";
 import { addAmazonItem, getAmazonQueue } from "./db/amazon";
 import { endWordGame, getWordGame } from "./db/wordgame";
+import { addToAutoShoutoutQueue, getAllAutoShoutoutCandidates, getAutoShoutoutQueue, isAutoShoutoutCandidate, removeFromAutoshoutoutQueue, updateAutoShoutoutCandidate } from "./db/autoshoutouts";
 
 export interface SessionData {
   userId: string;
@@ -812,6 +814,36 @@ async function initBot(c: ChatClient) {
     }
   }, 1e3);
 
+  // Handle Auto-Shoutout Queue
+  setInterval(async () => {
+    const queue = getAutoShoutoutQueue();
+    const dbBotconfig = getBotConfig(process.env.BOT_USER_ID);
+
+    if (dbBotconfig && queue.length > 0) {
+      let lastShoutout = dbBotconfig?.last_shoutout || 0;
+
+      const SHOUTOUT_THRESHOLD = (60 * 1000) * 2.5;
+
+      if ((Date.now() - SHOUTOUT_THRESHOLD) >= lastShoutout) {
+        const candidate = queue[0];
+
+        try {
+          const apiUser = await apiClient.users.getUserById(candidate.user_id);
+          if (apiUser) {
+            await shoutoutById(candidate.user_id);
+
+            updateBotConfig(process.env.BOT_USER_ID, {id: process.env.BOT_USER_ID, last_shoutout: Date.now()})
+          }
+
+          updateAutoShoutoutCandidate(candidate.user_id, {last_notified: Date.now()})
+          removeFromAutoshoutoutQueue(candidate.user_id);
+        } catch (e) {
+          console.log(`Failed to process auto-shoutout candidate from queue (${candidate.user_id})`)
+        }
+      }
+    }
+  },1e3);
+
   // Hand out points to all chatters and reset all bot points
   setInterval(async () => {
     for (const bot of [...KNOWN_BOT_NAMES, process.env.BOT_USER_NAME]) {
@@ -1079,7 +1111,7 @@ async function initBot(c: ChatClient) {
     );
     // let stream = true;
     if (scheduledMessages.length > 0 && stream) {
-      let int = await setInterval(async () => {
+      let int = setInterval(async () => {
         let filtered = await Promise.all(
           scheduledMessages.filter(
             async (m) => (await m.getContent()) !== null,
@@ -1104,7 +1136,8 @@ async function initBot(c: ChatClient) {
     }
     // })
   });
-  c.onJoin((channel, user) => {
+  c.onJoin(async (channel, user) => {
+    if(process.argv.includes("--dev")) await c.say(channel, `🤖`)
     console.log(`[${user}] Joined Channel -> ${channel}`);
   });
 
@@ -1126,6 +1159,8 @@ async function initBot(c: ChatClient) {
       );
       try {
         await shoutout(raider);
+        const apiUser = await getUser(raider);
+        if(apiUser && isAutoShoutoutCandidate(apiUser.id)) updateAutoShoutoutCandidate(apiUser.id, {last_notified: Date.now()})
       } catch (e) {
         console.log(`Failed to auto-shoutout ${raider}`);
       }
@@ -1260,6 +1295,18 @@ async function initBot(c: ChatClient) {
     console.log(content);
 
     if (isBot) return;
+
+    const AUTO_SHOUTOUT_THRESHOLD = (1000 * 60) * 60 * 8;
+    const autoShoutoutCandidates = getAllAutoShoutoutCandidates((c) => (Date.now() - AUTO_SHOUTOUT_THRESHOLD) >= c.last_notified);
+    const autoShoutoutQueue = getAutoShoutoutQueue();
+
+    const candidate = autoShoutoutCandidates.find(c => c.user_id === msg.userInfo.userId) || null;
+    if (candidate && !autoShoutoutQueue.some(qi => qi.user_id === msg.userInfo.userId)) {
+      const qi = addToAutoShoutoutQueue(msg.userInfo.userId);
+      const game = await getGame(msg.userInfo.userName);
+      await reply(c, process.env.CHANNEL, `DinoDance Follow @${msg.userInfo.displayName} at https://twitch.tv/${msg.userInfo.displayName}!${game ? ` They were last playing ${game}!` : ""} DinoDance`)
+      console.log(`Added @${msg.userInfo.displayName} (${msg.userInfo.userId}) to the auto-shoutout queue at position ${qi.position}`)
+    }
 
     if (
       userHasAuthority(msg.userInfo) &&
@@ -2018,10 +2065,11 @@ async function initBot(c: ChatClient) {
 
               try {
                 query = query.replaceAll("@", "");
+                updateBotConfig(process.env.BOT_USER_ID, { id: process.env.BOT_USER_ID, last_shoutout: Date.now() });
                 let shout = await shoutout(query);
-                replaceWith = shout ? "" : "Error Shouting Out";
+                replaceWith = shout ? "" : "";
               } catch (e) {
-                replaceWith = `Error Shouting Out`;
+                replaceWith = ``;
               }
 
               break;

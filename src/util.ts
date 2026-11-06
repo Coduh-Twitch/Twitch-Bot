@@ -226,6 +226,18 @@ export const shoutout = async (username: string): Promise<boolean> => {
   }
 };
 
+export const shoutoutById = async (id: string): Promise<boolean> => {
+  try {
+    await apiClient.asUser(process.env.BOT_USER_ID, async (ctx) => {
+      await ctx.chat.shoutoutUser(process.env.CHANNEL_ID, id);
+    });
+    return true;
+  } catch (e) {
+    console.log(e);
+    return false;
+  }
+};
+
 export const getUser = async (login: string): Promise<HelixUser | null> => {
   try {
     let apiUser = await apiClient.users.getUserByName(login);
