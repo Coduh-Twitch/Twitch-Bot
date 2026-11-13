@@ -425,3 +425,48 @@ export const timeAgo = (date: Date) => {
 
   return Math.floor(seconds) + " seconds ago";
 };
+
+
+export const formatTimeUntil = (time: Date | number): string =>  {
+  const WEEK_IN_MILLIS = 6.048e8,
+    DAY_IN_MILLIS = 8.64e7,
+    HOUR_IN_MILLIS = 3.6e6,
+    MIN_IN_MILLIS = 6e4,
+    SEC_IN_MILLIS = 1e3;
+
+  let currentDate = new Date();
+  const getCurrentUTCTime = () =>
+    currentDate.getTime() - currentDate.getTimezoneOffset() * 60000;
+
+  const timeFromNow = (date: Date, formatter) => {
+    let d = new Date(date);
+    const millis =
+        typeof date === "string"
+          ? d.getTime() - d.getTimezoneOffset() * 60000
+          : date.getTime() - date.getTimezoneOffset() * 60000,
+      diff = millis - getCurrentUTCTime();
+    if (Math.abs(diff) > WEEK_IN_MILLIS)
+      return formatter.format(Math.trunc(diff / WEEK_IN_MILLIS), "week");
+    else if (Math.abs(diff) > DAY_IN_MILLIS)
+      return formatter.format(Math.trunc(diff / DAY_IN_MILLIS), "day");
+    else if (Math.abs(diff) > HOUR_IN_MILLIS)
+      return formatter.format(
+        Math.trunc((diff % DAY_IN_MILLIS) / HOUR_IN_MILLIS),
+        "hour",
+      );
+    else if (Math.abs(diff) > MIN_IN_MILLIS)
+      return formatter.format(
+        Math.trunc((diff % HOUR_IN_MILLIS) / MIN_IN_MILLIS),
+        "minute",
+      );
+    else
+      return formatter.format(
+        Math.trunc((diff % MIN_IN_MILLIS) / SEC_IN_MILLIS),
+        "second",
+      );
+  };
+
+  const dateFormatter = new Intl.RelativeTimeFormat("en", { style: "long" });
+
+  return timeFromNow(new Date(time), dateFormatter);
+}

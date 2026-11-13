@@ -39,6 +39,7 @@ import PointsCommand from "./commands/PointsCommand";
 import SetRoomCodeCommand from "./commands/SetRoomCodeCommand";
 import RoomCodeCommand from "./commands/RoomCodeCommand";
 import {
+  formatTimeUntil,
   getFollowedDate,
   getGame,
   getRoomCode,
@@ -948,6 +949,25 @@ async function initBot(c: ChatClient) {
         );
       },
     );
+
+    broadcasterEventSub.onChannelPredictionBegin(process.env.CHANNEL_ID, async (ev) => {
+      await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+        await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `New prediction! "${ev.title}" | Outcomes are ${ev.outcomes.map(o => `"${o.title}"`).join(ev.outcomes.length > 2 ? ", " : " or ")} | Vote to earn channel points! [Voting ends ${formatTimeUntil(ev.lockDate)}]`, color: "green"})
+      })
+    })
+
+    broadcasterEventSub.onChannelPredictionLock(process.env.CHANNEL_ID, async ev => {
+      await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+        await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `Prediction: Voting has ended! Awaiting an outcome for "${ev.title}"...`, color: "green"})
+      })
+    })
+
+    broadcasterEventSub.onChannelPredictionEnd(process.env.CHANNEL_ID, async ev => {
+      await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+        let cancelled = ev?.winningOutcome ? false : true;
+        await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `${cancelled ? `Prediction "${ev.title}" was cancelled! Channel points will be returned.` : `Prediction: An outcome has been decided! "${ev.winningOutcome.title}" wins it! ${ev.winningOutcome.channelPoints > 0 ? `${ev.winningOutcome.channelPoints.toLocaleString()} channel point${ev.winningOutcome.channelPoints === 1 ? "" : "s"} will be distributed to ${ev.winningOutcome.users.toLocaleString()} chatter${ev.winningOutcome.users === 1 ? "" : "s"}!` : "Nobody voted for this outcome..."}`}`, color: "purple"})
+      })
+    })
 
     broadcasterEventSub.onChannelVipAdd(process.env.CHANNEL_ID, async (ev) => {
       await reply(
