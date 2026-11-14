@@ -481,6 +481,7 @@ export default class Espn {
   ordinalSuffix(i: number): string {
     let j = i % 10,
       k = i % 100;
+    if (!i || i === 0) return `Pregame`;
     if (j === 1 && k !== 11) {
       return (i || 1).toLocaleString() + "st";
     }
