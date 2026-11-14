@@ -482,15 +482,15 @@ export default class Espn {
     let j = i % 10,
       k = i % 100;
     if (j === 1 && k !== 11) {
-      return i.toLocaleString() + "st";
+      return (i || 1).toLocaleString() + "st";
     }
     if (j === 2 && k !== 12) {
-      return i.toLocaleString() + "nd";
+      return (i || 1).toLocaleString() + "nd";
     }
     if (j === 3 && k !== 13) {
-      return i.toLocaleString() + "rd";
+      return (i || 1).toLocaleString() + "rd";
     }
-    return i.toLocaleString() + "th";
+    return (i || 1).toLocaleString() + "th";
   }
 
   getLeagueReadable(sport: EspnSeason = this.season): string {
@@ -572,7 +572,7 @@ export default class Espn {
   }
 
   getData(): EspnData {
-    return { ...this.store.data, emoji: this.getSeasonEmoji(), leagueReadable: this.getLeagueReadable(), homeScore: this.homeScore, homeTeam: this.homeTeam, awayScore: this.awayScore, awayTeam: this.awayTeam, timeFormatted: this.timeFormatted, awayLogo: this.awayLogo, homeLogo: this.homeLogo, homeColor: this.homeColor, awayColor: this.awayColor, periodFormatted: this.ordinalSuffix(this.period), period: this.period };
+    return { ...this.store.data, emoji: this.getSeasonEmoji(), leagueReadable: this.getLeagueReadable(), homeScore: this.homeScore, homeTeam: this.homeTeam, awayScore: this.awayScore, awayTeam: this.awayTeam, timeFormatted: this.timeFormatted, awayLogo: this.awayLogo, homeLogo: this.homeLogo, homeColor: this.homeColor, awayColor: this.awayColor, periodFormatted: this.ordinalSuffix(this.period || 0), period: this.period || 0 };
   }
 
   getSeasonEmoji(season: EspnSeason = this.season): string {
