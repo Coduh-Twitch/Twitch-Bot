@@ -11,11 +11,13 @@ export default class TikTokConnection {
   connected: boolean;
   apiKey: string | null;
   live: TikTokLiveConnection;
+  reconnectInterval: NodeJS.Timeout | null;
 
   constructor(channel: string, apiKey: string | null = null) {
     this.channel = channel;
     this.apiKey = apiKey;
     this.connected = false;
+    this.reconnectInterval = null;
     if (this.apiKey !== null) SignConfig.apiKey = this.apiKey;
     this.live = new TikTokLiveConnection(this.channel);
   }
@@ -39,15 +41,27 @@ export default class TikTokConnection {
     );
   }
 
+  async tryConnect() {
+    this.live.connect().catch((e) => {
+      console.log(`[@${this.channel}] TikTok connection failed. Retrying in 60s`, e);
+      if (!this.reconnectInterval) {
+        this.reconnectInterval = setInterval(() => {
+          this.tryConnect();
+        }, 10e3);
+      }
+    });
+  }
+
   connect(): TikTokLiveConnection {
-    this.live
-      .connect()
-      .then(() => {
+
+      this.tryConnect().then(() => {
         console.log(`[@${this.channel}] TikTok connection initialized`);
+        if (this.reconnectInterval) {
+          clearInterval(this.reconnectInterval)
+          this.reconnectInterval = null;
+        }
       })
-      .catch((e) => {
-        console.log(`TikTok connection failed.`, e);
-      });
+
     return this.live;
   }
 }
