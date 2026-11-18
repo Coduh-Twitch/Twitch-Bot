@@ -240,7 +240,7 @@ setInterval(() => {
   broadcasterAuthProvider = null;
   broadcasterEventSub?.stop();
   broadcasterEventSub = null;
-}, 86400/2);
+}, 86400e3/2);
 
 setInterval(async () => {
   let tokenUser = null;
