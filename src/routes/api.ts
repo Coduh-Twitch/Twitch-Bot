@@ -37,6 +37,7 @@ import { getQueue, getQueueMembers } from "../db/queues";
 import { User, userModel } from "../models/user";
 import { createWordGame, endWordGame, getWordGame } from "../db/wordgame";
 import { decrementCounter, deleteCounter, ensureCounter, getAllCounters, getCounter, incrementCounter, renameCounter, resetCounter } from "../db/counters";
+import {PollyClient, SynthesizeSpeechCommand, VoiceId} from "@aws-sdk/client-polly"
 
 function ordinal_suffix_of(i: number) {
   let j = i % 10,
@@ -54,6 +55,7 @@ function ordinal_suffix_of(i: number) {
 }
 
 const apiRouter = Router();
+const polly = new PollyClient({ region: process.env.A_REGION, credentials: { accessKeyId: process.env.A_PUB_KEY, secretAccessKey: process.env.A_PRIV_KEY } });
 
 // apiRouter.post("/trigger-spotify-search", async (req, res) => {
 //     let query = decodeURI(req.query.q.toString());
@@ -83,6 +85,27 @@ const apiRouter = Router();
 // })
 //
 //
+
+apiRouter.post("/speech", async (req, res) => {
+  console.log("HEADERS", req.headers)
+  console.log("TTS", req.body)
+  if (!req?.headers?.["authorization"] || req?.headers?.["authorization"] !== process.env.CLIENT_SECRET) return res.status(403);
+  let voice: VoiceId = "Brian";
+  if (req.query?.["voice"] && Object.values(VoiceId).includes(req.query?.["voice"] as any)) voice = req.query["voice"] as VoiceId;
+  const tts: { content: string } = req.body;
+  if (!tts?.content) return res.status(401);
+
+  try {
+    const speech = await polly.send(new SynthesizeSpeechCommand({ OutputFormat: "mp3", VoiceId: voice, Engine: "standard", Text: tts.content }));
+    const audio = speech?.AudioStream || null;
+    if (!audio) return res.status(401);
+
+    const data = await audio.transformToByteArray();
+    return res.send(data);
+  } catch (e) {
+    return res.status(401)
+  }
+});
 
 apiRouter.get("/espn", async (req, res) => {
   let store = ESPN.getData();
