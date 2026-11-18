@@ -47,7 +47,7 @@ export default class TikTokConnection {
       if (!this.reconnectInterval) {
         this.reconnectInterval = setInterval(() => {
           this.tryConnect();
-        }, 10e3);
+        }, 60e3);
       }
     });
   }
