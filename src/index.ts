@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { RefreshingAuthProvider, StaticAuthProvider } from "@twurple/auth";
+import { RefreshingAuthProvider, refreshUserToken, StaticAuthProvider } from "@twurple/auth";
 import { ChatClient, ChatMessage, ChatUser } from "@twurple/chat";
 import axios, { AxiosError, get, post } from "axios";
 import {
@@ -92,7 +92,7 @@ import {
   getAllGiveaways,
   removeEntrant,
 } from "./db/giveaways";
-import { addTTS } from "./db/tts";
+import { addTTS, getTTSQueue, removeTTS } from "./db/tts";
 import Filter from "leo-profanity";
 import { getBotConfig, updateBotConfig } from "./db/botconfig";
 import {
@@ -157,6 +157,8 @@ let sevenWarnings: Map<string, boolean> = new Map();
 
 let gifterCounts: Map<string | undefined, number> = new Map();
 
+export let lastMessageIds: Map<string, [string, string]> = new Map(); // user id, [message id, message content]
+
 const notifiedThresholds = new Set<number>();
 
 let lastScheduledMessage = "";
@@ -207,6 +209,14 @@ export const client: ChatClient = new ChatClient({
 export const clientEventSub: EventSubWsListener = new EventSubWsListener({
   apiClient,
 });
+clientEventSub.onSubscriptionCreateFailure((sub, err) => {
+  if (/429/i.test(err?.stack || "")) {
+    console.log(`ClientEventSub failed to subscribe (rate-limited): ${sub.id}`)
+  }
+})
+clientEventSub.onSubscriptionCreateSuccess(sub => {
+  console.log(`ClientEventSub subscribed to ${sub.id}`)
+})
 let clientReady = false;
 // export const googleApi: GoogleAPI = new GoogleAPI(process.env.YOUTUBE_KEY);
 export const websocket: Socket = new Socket(parseInt(process.env.SOCKET_PORT));
@@ -222,6 +232,15 @@ export const commandsMap: Map<string, ChatCommand> = new Map<
 // export const CHANNEL_REWARDS = {
 //     spotify_test: "9bbed441-e8e2-47d7-9364-b519d1030206"
 // }
+//
+
+setInterval(() => {
+  console.log("Clearing auth for refresh...");
+  broadcasterApiClient = null;
+  broadcasterAuthProvider = null;
+  broadcasterEventSub?.stop();
+  broadcasterEventSub = null;
+}, 30e3);
 
 setInterval(async () => {
   let tokenUser = null;
@@ -235,12 +254,14 @@ setInterval(async () => {
     console.log("ERROR OCCURRED FETCHING FOLLOWERS", e);
     broadcasterApiClient = null;
     broadcasterAuthProvider = null;
+    broadcasterEventSub?.stop();
     broadcasterEventSub = null;
   }
 
   if (!tokenUser && broadcasterApiClient !== null) {
     broadcasterApiClient = null;
     broadcasterAuthProvider = null;
+    broadcasterEventSub?.stop();
     broadcasterEventSub = null;
   }
   if (!client) {
@@ -256,7 +277,6 @@ setInterval(async () => {
     let sessionRes = await get(
       `${process.env.WEB_URL}/api/session?key=${process.env.CLIENT_SECRET}`,
     );
-    console.log("SESSION", sessionRes.data);
     if (!sessionRes || !sessionRes.data || !sessionRes.data?.data) {
       console.log(`Broadcaster Auth Session not found.`);
     } else {
@@ -269,12 +289,122 @@ setInterval(async () => {
             process.env.CLIENT_ID,
             session.access_token,
           );
+
           broadcasterApiClient = new ApiClient({
             authProvider: broadcasterAuthProvider,
           });
           broadcasterEventSub = new EventSubWsListener({
             apiClient: broadcasterApiClient,
           });
+          broadcasterEventSub.onSubscriptionCreateFailure((sub, err) => {
+            if (/token/i.test(err?.message || "")) {
+              console.log("BROADCASTER EVENTSUB SUBSCRIPTION FAILED, ATTEMPTING REFRESHES ON NEXT POLL", sub.id, err.message, err.stack);
+              broadcasterApiClient = null;
+              broadcasterAuthProvider = null;
+              broadcasterEventSub?.stop();
+              broadcasterEventSub = null;
+            }
+          })
+          broadcasterEventSub.onSubscriptionCreateSuccess(sub => {
+            console.log(`BroadcasterEventSub subscribed to ${sub.id}`)
+          })
+          broadcasterEventSub.onChannelPredictionBegin(process.env.CHANNEL_ID, async (ev) => {
+            await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+              await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `New prediction! "${ev.title}" | Outcomes are ${ev.outcomes.map(o => `"${o.title}"`).join(ev.outcomes.length > 2 ? ", " : " or ")} | Vote to earn channel points! [Voting ends ${formatTimeUntil(ev.lockDate)}]`, color: "green"})
+            })
+          })
+
+          broadcasterEventSub.onChannelPredictionLock(process.env.CHANNEL_ID, async ev => {
+            await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+              await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `Prediction: Voting has ended! Awaiting an outcome for "${ev.title}"...`, color: "green"})
+            })
+          })
+
+          broadcasterEventSub.onChannelPredictionEnd(process.env.CHANNEL_ID, async ev => {
+            await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
+              let cancelled = ev?.winningOutcome ? false : true;
+              await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `${cancelled ? `Prediction "${ev.title}" was cancelled! Channel points will be returned.` : `Prediction: An outcome has been decided! "${ev.winningOutcome.title}" wins it! ${ev.winningOutcome.channelPoints > 0 ? `${ev.winningOutcome.channelPoints.toLocaleString()} channel point${ev.winningOutcome.channelPoints === 1 ? "" : "s"} will be distributed to ${ev.winningOutcome.users.toLocaleString()} chatter${ev.winningOutcome.users === 1 ? "" : "s"}!` : "Nobody voted for this outcome..."}`}`, color: "purple"})
+            })
+          })
+
+          broadcasterEventSub.onChannelVipAdd(process.env.CHANNEL_ID, async (ev) => {
+            await reply(
+              client,
+              ev.userDisplayName,
+              `DinoDance @${ev.userDisplayName} was given VIP! New shiny diamond!`,
+            );
+          });
+
+          broadcasterEventSub.onChannelHypeTrainBeginV2(
+            process.env.CHANNEL_ID,
+            async (ev) => {
+              await reply(
+                client,
+                ev.broadcasterName,
+                `TwitchConHYPE HYPE TRAIN! A level ${ev.level} Hype Train has started! PogChamp`,
+              );
+            },
+          );
+
+          broadcasterEventSub.onStreamOnline(process.env.CHANNEL_ID, async (ev) => {
+            let stream = await ev.getStream();
+            await reply(
+              client,
+              ev.broadcasterDisplayName,
+              `@${ev.broadcasterDisplayName} is now live! "${stream.title}" -> Playing "${stream.gameName}"!`,
+            );
+          });
+
+          broadcasterEventSub.onStreamOffline(process.env.CHANNEL_ID, async ev => {
+            lastMessageIds = new Map();
+          })
+
+          broadcasterEventSub.onChannelRewardRemove(
+            process.env.CHANNEL_ID,
+            async (ev) => {
+              let dbSoundAlert = getSoundAlertFromReward(ev.id);
+              if (dbSoundAlert) {
+                deleteSoundAlertReward(ev.id);
+              }
+            },
+          );
+
+          broadcasterEventSub.onChannelRewardUpdate(
+            process.env.CHANNEL_ID,
+            async (ev) => {
+              let dbSoundAlert = getSoundAlertFromReward(ev.id);
+              if (dbSoundAlert) {
+                if (ev.title !== dbSoundAlert.name) {
+                  updateSoundAlertRewardByRewardId(ev.id, {
+                    ...dbSoundAlert,
+                    name: ev.title,
+                  });
+                  await broadcasterApiClient.channelPoints.updateCustomReward(
+                    process.env.CHANNEL_ID,
+                    dbSoundAlert.reward_id,
+                    { prompt: `Play a ${ev.title}` },
+                  );
+                }
+              }
+            },
+          );
+
+          broadcasterEventSub.onChannelRedemptionAdd(
+            process.env.CHANNEL_ID,
+            async (ev) => {
+              let dbSoundAlert = getSoundAlertFromReward(ev.rewardId);
+              if (dbSoundAlert) {
+                addSoundAlertToQueue({
+                  reward_id: dbSoundAlert.reward_id,
+                  alert_name: dbSoundAlert.name,
+                  audio_path: dbSoundAlert.audio_path,
+                  sent_at: Date.now(),
+                  sent_by_id: ev.userId,
+                  sent_by_username: ev.userDisplayName,
+                });
+              }
+            },
+          );
           broadcasterEventSub.start();
         } else {
           console.log(
@@ -312,7 +442,6 @@ setInterval(async () => {
       if (clientAuthDetail.data?.data?.[0]) {
         let ud = clientAuthDetail.data?.data?.[0];
         if (!authProvider.hasUser(ud.id)) {
-          console.log("BOT SESSION", botSession);
           if (botSession.userId === ud.id)
             await authProvider.addUserForToken(
               {
@@ -350,9 +479,23 @@ setInterval(async () => {
           }
         }
       } else {
-        console.log(
-          `Re-Authorize Client - Could not fetch authorization details`,
-        );
+
+
+        if (botSession.refreshToken) {
+          console.log("Attempting to refresh client authorization...")
+          let nt = await refreshUserToken(process.env.CLIENT_ID, process.env.CLIENT_SECRET, botSession.refreshToken);
+          if (nt) {
+            console.log("Refreshed bot session token... will try again!")
+          } else {
+            console.log(
+              `Re-Authorize Client - Could not fetch authorization details`,
+            );
+          }
+        } else {
+          console.log(
+            `Re-Authorize Client - Could not fetch authorization details`,
+          );
+        }
       }
     } else {
       console.log(`Re-Authorize Client - Session not found`);
@@ -578,6 +721,8 @@ authProvider.onRefresh(
     await sessionModel.findOneAndUpdate({ userId: userId }, tokenData),
 );
 
+
+
 app.use(json());
 app.use("/api", apiRouter);
 app.use("/auth", AuthRoute);
@@ -641,6 +786,17 @@ async function initBot(c: ChatClient) {
       );
     },
   );
+
+  // Stale TTS
+  setInterval(async () => {
+    const THRESHOLD = 60e3 * 3;
+    const all = getTTSQueue().filter(t => (Date.now() - t.sent_at) >= THRESHOLD);
+
+    for (const tts of all) {
+      removeTTS(tts.id);
+      console.log(`Removed stale TTS ${tts.id} (${all.indexOf(tts)+1} of ${all.length}) [${tts.sent_by_username}/${tts.sent_by_id}]`)
+    }
+  }, 10e3);
 
   // Timers
   setInterval(async () => {
@@ -950,62 +1106,7 @@ async function initBot(c: ChatClient) {
       },
     );
 
-    broadcasterEventSub.onChannelPredictionBegin(process.env.CHANNEL_ID, async (ev) => {
-      await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
-        await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `New prediction! "${ev.title}" | Outcomes are ${ev.outcomes.map(o => `"${o.title}"`).join(ev.outcomes.length > 2 ? ", " : " or ")} | Vote to earn channel points! [Voting ends ${formatTimeUntil(ev.lockDate)}]`, color: "green"})
-      })
-    })
 
-    broadcasterEventSub.onChannelPredictionLock(process.env.CHANNEL_ID, async ev => {
-      await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
-        await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `Prediction: Voting has ended! Awaiting an outcome for "${ev.title}"...`, color: "green"})
-      })
-    })
-
-    broadcasterEventSub.onChannelPredictionEnd(process.env.CHANNEL_ID, async ev => {
-      await apiClient.asUser(process.env.BOT_USER_ID, async ctx => {
-        let cancelled = ev?.winningOutcome ? false : true;
-        await ctx.chat.sendAnnouncement(process.env.CHANNEL_ID, {message: `${cancelled ? `Prediction "${ev.title}" was cancelled! Channel points will be returned.` : `Prediction: An outcome has been decided! "${ev.winningOutcome.title}" wins it! ${ev.winningOutcome.channelPoints > 0 ? `${ev.winningOutcome.channelPoints.toLocaleString()} channel point${ev.winningOutcome.channelPoints === 1 ? "" : "s"} will be distributed to ${ev.winningOutcome.users.toLocaleString()} chatter${ev.winningOutcome.users === 1 ? "" : "s"}!` : "Nobody voted for this outcome..."}`}`, color: "purple"})
-      })
-    })
-
-    broadcasterEventSub.onChannelVipAdd(process.env.CHANNEL_ID, async (ev) => {
-      await reply(
-        c,
-        ev.userDisplayName,
-        `DinoDance @${ev.userDisplayName} was given VIP! New shiny diamond!`,
-      );
-    });
-
-    broadcasterEventSub.onChannelHypeTrainBeginV2(
-      process.env.CHANNEL_ID,
-      async (ev) => {
-        await reply(
-          c,
-          ev.broadcasterName,
-          `TwitchConHYPE HYPE TRAIN! A level ${ev.level} Hype Train has started! PogChamp`,
-        );
-      },
-    );
-
-    broadcasterEventSub.onStreamOnline(process.env.CHANNEL_ID, async (ev) => {
-      let stream = await ev.getStream();
-      await reply(
-        c,
-        ev.broadcasterDisplayName,
-        `@${ev.broadcasterDisplayName} is now live! "${stream.title}" -> Playing "${stream.gameName}"!`,
-      );
-    });
-
-    broadcasterEventSub.onChannelRewardRemove(
-      process.env.CHANNEL_ID,
-      async (ev) => {
-        let dbSoundAlert = getSoundAlertFromReward(ev.id);
-        if (dbSoundAlert) {
-          deleteSoundAlertReward(ev.id);
-        }
-      },
-    );
 
     clientEventSub.onChannelChatNotification(
       process.env.CHANNEL_ID,
@@ -1018,57 +1119,20 @@ async function initBot(c: ChatClient) {
               ev.chatterDisplayName,
               `@${ev.chatterDisplayName} reached a watch streak of ${(ev.streakCount || 0).toLocaleString()}! DinoDance`,
             );
-            addTTS({
-              content: Filter.clean(ev.messageText || "", { replaceKey: "*" }),
-              sent_at: Date.now(),
-              sent_by_id: ev.chatterId,
-              sent_by_username: ev.chatterDisplayName,
-              voice: TTSVoices.ERIC,
-              streak: ev.streakCount || 0,
-            });
+            // addTTS({
+            //   content: Filter.clean(ev.messageText || "", { replaceKey: "*" }),
+            //   sent_at: Date.now(),
+            //   sent_by_id: ev.chatterId,
+            //   sent_by_username: ev.chatterDisplayName,
+            //   voice: TTSVoices.ERIC,
+            //   streak: ev.streakCount || 0,
+            // });
             break;
           }
         }
       },
     );
 
-    broadcasterEventSub.onChannelRewardUpdate(
-      process.env.CHANNEL_ID,
-      async (ev) => {
-        let dbSoundAlert = getSoundAlertFromReward(ev.id);
-        if (dbSoundAlert) {
-          if (ev.title !== dbSoundAlert.name) {
-            updateSoundAlertRewardByRewardId(ev.id, {
-              ...dbSoundAlert,
-              name: ev.title,
-            });
-            await broadcasterApiClient.channelPoints.updateCustomReward(
-              process.env.CHANNEL_ID,
-              dbSoundAlert.reward_id,
-              { prompt: `Play a ${ev.title}` },
-            );
-          }
-        }
-      },
-    );
-
-    // const soundAlertRewards = getAllRewards();
-    broadcasterEventSub.onChannelRedemptionAdd(
-      process.env.CHANNEL_ID,
-      async (ev) => {
-        let dbSoundAlert = getSoundAlertFromReward(ev.rewardId);
-        if (dbSoundAlert) {
-          addSoundAlertToQueue({
-            reward_id: dbSoundAlert.reward_id,
-            alert_name: dbSoundAlert.name,
-            audio_path: dbSoundAlert.audio_path,
-            sent_at: Date.now(),
-            sent_by_id: ev.userId,
-            sent_by_username: ev.userDisplayName,
-          });
-        }
-      },
-    );
     // for (const reward of soundAlertRewards) {
     //   console.log(`Subscribing to events for reward ${reward.name}`);
     // }
@@ -1076,9 +1140,9 @@ async function initBot(c: ChatClient) {
 
   // TikTok Chat
   tiktok.onMessage(async (message) => {
-    // console.log(
-    //   `TikTok message from @${message.user.uniqueId} (${message.user.nickname} | mod?: ${message.userIdentity.isModeratorOfAnchor}) -> ${message.comment}`,
-    // );
+    console.log(
+      `TikTok message from @${message.user.uniqueId} (${message.user.nickname} | mod?: ${message.userIdentity.isModeratorOfAnchor}) -> ${message.comment}`,
+    );
     if (websocket && websocket.socket)
       websocket.sendMessage(
         "chat",
@@ -1087,7 +1151,8 @@ async function initBot(c: ChatClient) {
   });
 
   tiktok.onMessageDelete(async (m) => {
-    console.log(`TIKTOK MESSAGE DELETED`, m.deleteMsgIdsList);
+
+    console.log(`TIKTOK MESSAGE DELETED`, m.common.displayText, m.deleteMsgIdsList);
   });
 
   // Chat Client
@@ -1215,12 +1280,20 @@ async function initBot(c: ChatClient) {
   });
 
   c.onResub(async (channel, user, sub, msg) => {
-    if ((sub.streak || 0) > 1)
+    if ((sub.streak || 0) > 1) {
+      // addTTS({
+      //   content: `${user} just resubscribed ${sub.isPrime ? "for free with Twitch Prime! PrimeMe" : `at Tier ${(Number(sub.plan) || 1000) / 1000}! DinoDance`} They've been subscribed for ${sub.streak || 1} month${(sub.streak || 1) === 1 ? "" : "s"}`,
+      //   sent_by_id: msg.userInfo.userId,
+      //   sent_by_username: msg.userInfo.userName,
+      //   sent_at: Date.now(),
+      //   voice: "Brian"
+      // })
       await reply(
         c,
         user,
         `@${user} just resubscribed ${sub.isPrime ? "for free with Twitch Prime! PrimeMe" : `at Tier ${(Number(sub.plan) || 1000) / 1000}! DinoDance`} They've been subscribed for ${sub.streak || 1} month${(sub.streak || 1) === 1 ? "" : "s"}`,
       );
+    }
   });
 
   c.onSubGift(async (channel, user, sub, msg) => {
@@ -1315,6 +1388,8 @@ async function initBot(c: ChatClient) {
     console.log(content);
 
     if (isBot) return;
+
+    if(!content.startsWith("!")) lastMessageIds.set(msg.userInfo.userId, [msg.id, content]);
 
     const AUTO_SHOUTOUT_THRESHOLD = (1000 * 60) * 60 * 8;
     const autoShoutoutCandidates = getAllAutoShoutoutCandidates((c) => (Date.now() - AUTO_SHOUTOUT_THRESHOLD) >= c.last_notified);
@@ -1552,9 +1627,12 @@ async function initBot(c: ChatClient) {
       }
     }
 
+    let co = (msg.isReply ? content.replace(/\@(\S+)\ /mi, "").trim() : content).trim();
+    // console.log("CONTENT", co)
+
     console.log(`[${channel}] Message Sent by ${user} -> ${content}`);
-    let cmd = content.toLowerCase().split(/ +/)[0];
-    let args: string[] = content.replace(cmd, "").trim().split(" ");
+    let cmd = co.toLowerCase().split(/ +/)[0];
+    let args: string[] = co.replace(cmd, "").trim().split(" ");
 
     let cmdNoPrefix = cmd.replace(prefix, "");
 
@@ -2466,13 +2544,16 @@ async function initBot(c: ChatClient) {
       }
     }
 
-    if (cmd.length > 0 && content.startsWith("!")) {
+
+
+
+    if (cmd.length > 0 && co.startsWith("!")) {
       let command: ChatCommand | null = null;
       for (const [key, cmd] of commandsMap.entries()) {
         // console.log("checking command", cmd.name);
         if (!command) {
-          let rawCommand = content.slice(1).split(" ")[0].trim();
-          // console.log("raw", rawCommand);
+          let rawCommand = co.slice(1).split(" ")[0].trim();
+          // console.log("raw", `${rawCommand} / ${cmd.name}`);
           if (cmd.name === rawCommand.toLowerCase()) command = cmd;
           if (cmd?.aliases && cmd.aliases.includes(rawCommand.toLowerCase()))
             command = cmd;
@@ -2480,7 +2561,7 @@ async function initBot(c: ChatClient) {
       }
 
       if (command) {
-        console.log("COMMAND FOUND", command);
+        console.log("COMMAND FOUND", command.name);
         console.log("user level", command.userLevel);
         let level = `${command.userLevel}`;
         if (!userLevelCheck(level.toLowerCase() as any, true, msg.userInfo)) {
@@ -2491,7 +2572,7 @@ async function initBot(c: ChatClient) {
             msg,
           );
         } else {
-          await runCommand(command, c, user, content.split(cmd)[1], msg);
+          await runCommand(command, c, user, co.split(cmd)[1], msg);
         }
       }
       // if (["sr", "songrequest"].includes(cmdNoPrefix)) await runCommand(SongRequestCommand, client, user, content.split(cmd)[1], msg)
@@ -2659,7 +2740,11 @@ async function initBot(c: ChatClient) {
 
 //     })
 // }
-tiktok.connect();
+try {
+  tiktok.connect();
+} catch (e) {
+  console.log("TIKTOK FAILED TO CONNECT", e)
+}
 mongoose
   .connect(process.env.MONGO_URI, { appName: "coduh", dbName: "duh" })
   .then(() => {
